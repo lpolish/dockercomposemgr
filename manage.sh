@@ -45,7 +45,7 @@ check_docker() {
         echo -e "${RED}Error: Docker is not installed${NC}"
         exit 1
     fi
-    if ! command -v docker-compose &> /dev/null; then
+    if ! command -v docker compose &> /dev/null; then
         echo -e "${RED}Error: Docker Compose is not installed${NC}"
         exit 1
     fi
@@ -76,12 +76,12 @@ get_status() {
             if [ -d "$app_dir" ]; then
                 app_name=$(basename "$app_dir")
                 echo "Checking $app_name..."
-                docker-compose -f "$app_dir/docker-compose.yml" ps
+                docker compose -f "$app_dir/docker-compose.yml" ps
             fi
         done
     else
         if [ -d "$APPS_DIR/$app" ]; then
-            docker-compose -f "$APPS_DIR/$app/docker-compose.yml" ps
+            docker compose -f "$APPS_DIR/$app/docker-compose.yml" ps
         else
             echo -e "${RED}Error: Application '$app' not found${NC}"
             exit 1
@@ -108,13 +108,13 @@ get_app_info() {
 
     # Get container status
     echo -e "${YELLOW}Container Status:${NC}"
-    docker-compose -f "$APPS_DIR/$app/docker-compose.yml" ps
+    docker compose -f "$APPS_DIR/$app/docker-compose.yml" ps
     echo
 
     # Get container resource usage
     echo -e "${YELLOW}Resource Usage:${NC}"
     echo "CPU and Memory usage for each container:"
-    for container in $(docker-compose -f "$APPS_DIR/$app/docker-compose.yml" ps -q); do
+    for container in $(docker compose -f "$APPS_DIR/$app/docker-compose.yml" ps -q); do
         echo -e "${GREEN}Container: $(docker inspect --format '{{.Name}}' $container)${NC}"
         docker stats --no-stream $container
     done
@@ -122,27 +122,27 @@ get_app_info() {
 
     # Get network information
     echo -e "${YELLOW}Network Information:${NC}"
-    docker-compose -f "$APPS_DIR/$app/docker-compose.yml" network ls
+    docker compose -f "$APPS_DIR/$app/docker-compose.yml" network ls
     echo
 
     # Get volume information
     echo -e "${YELLOW}Volume Information:${NC}"
-    docker-compose -f "$APPS_DIR/$app/docker-compose.yml" volume ls
+    docker compose -f "$APPS_DIR/$app/docker-compose.yml" volume ls
     echo
 
     # Get environment variables
     echo -e "${YELLOW}Environment Configuration:${NC}"
-    docker-compose -f "$APPS_DIR/$app/docker-compose.yml" config
+    docker compose -f "$APPS_DIR/$app/docker-compose.yml" config
     echo
 
     # Get recent logs
     echo -e "${YELLOW}Recent Logs (last 5 lines):${NC}"
-    docker-compose -f "$APPS_DIR/$app/docker-compose.yml" logs --tail=5
+    docker compose -f "$APPS_DIR/$app/docker-compose.yml" logs --tail=5
     echo
 
     # Get health status
     echo -e "${YELLOW}Health Status:${NC}"
-    for container in $(docker-compose -f "$APPS_DIR/$app/docker-compose.yml" ps -q); do
+    for container in $(docker compose -f "$APPS_DIR/$app/docker-compose.yml" ps -q); do
         health=$(docker inspect --format='{{.State.Health.Status}}' $container 2>/dev/null)
         if [ ! -z "$health" ]; then
             echo -e "${GREEN}Container: $(docker inspect --format '{{.Name}}' $container)${NC}"
@@ -170,12 +170,12 @@ case "$1" in
                 if [ -d "$app_dir" ]; then
                     app_name=$(basename "$app_dir")
                     echo "Starting $app_name..."
-                    docker-compose -f "$app_dir/docker-compose.yml" up -d
+                    docker compose -f "$app_dir/docker-compose.yml" up -d
                 fi
             done
         else
             if [ -d "$APPS_DIR/$2" ]; then
-                docker-compose -f "$APPS_DIR/$2/docker-compose.yml" up -d
+                docker compose -f "$APPS_DIR/$2/docker-compose.yml" up -d
             else
                 echo -e "${RED}Error: Application '$2' not found${NC}"
                 exit 1
@@ -188,12 +188,12 @@ case "$1" in
                 if [ -d "$app_dir" ]; then
                     app_name=$(basename "$app_dir")
                     echo "Stopping $app_name..."
-                    docker-compose -f "$app_dir/docker-compose.yml" down
+                    docker compose -f "$app_dir/docker-compose.yml" down
                 fi
             done
         else
             if [ -d "$APPS_DIR/$2" ]; then
-                docker-compose -f "$APPS_DIR/$2/docker-compose.yml" down
+                docker compose -f "$APPS_DIR/$2/docker-compose.yml" down
             else
                 echo -e "${RED}Error: Application '$2' not found${NC}"
                 exit 1
@@ -206,12 +206,12 @@ case "$1" in
                 if [ -d "$app_dir" ]; then
                     app_name=$(basename "$app_dir")
                     echo "Restarting $app_name..."
-                    docker-compose -f "$app_dir/docker-compose.yml" restart
+                    docker compose -f "$app_dir/docker-compose.yml" restart
                 fi
             done
         else
             if [ -d "$APPS_DIR/$2" ]; then
-                docker-compose -f "$APPS_DIR/$2/docker-compose.yml" restart
+                docker compose -f "$APPS_DIR/$2/docker-compose.yml" restart
             else
                 echo -e "${RED}Error: Application '$2' not found${NC}"
                 exit 1
@@ -224,12 +224,12 @@ case "$1" in
                 if [ -d "$app_dir" ]; then
                     app_name=$(basename "$app_dir")
                     echo "Logs for $app_name:"
-                    docker-compose -f "$app_dir/docker-compose.yml" logs
+                    docker compose -f "$app_dir/docker-compose.yml" logs
                 fi
             done
         else
             if [ -d "$APPS_DIR/$2" ]; then
-                docker-compose -f "$APPS_DIR/$2/docker-compose.yml" logs
+                docker compose -f "$APPS_DIR/$2/docker-compose.yml" logs
             else
                 echo -e "${RED}Error: Application '$2' not found${NC}"
                 exit 1
@@ -270,14 +270,14 @@ case "$1" in
                 if [ -d "$app_dir" ]; then
                     app_name=$(basename "$app_dir")
                     echo "Updating $app_name..."
-                    docker-compose -f "$app_dir/docker-compose.yml" pull
-                    docker-compose -f "$app_dir/docker-compose.yml" up -d
+                    docker compose -f "$app_dir/docker-compose.yml" pull
+                    docker compose -f "$app_dir/docker-compose.yml" up -d
                 fi
             done
         else
             if [ -d "$APPS_DIR/$2" ]; then
-                docker-compose -f "$APPS_DIR/$2/docker-compose.yml" pull
-                docker-compose -f "$APPS_DIR/$2/docker-compose.yml" up -d
+                docker compose -f "$APPS_DIR/$2/docker-compose.yml" pull
+                docker compose -f "$APPS_DIR/$2/docker-compose.yml" up -d
             else
                 echo -e "${RED}Error: Application '$2' not found${NC}"
                 exit 1
