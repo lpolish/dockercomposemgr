@@ -1,0 +1,41 @@
+{
+  "templates": {
+    "nodejs": {
+      "name": "Node.js (Express + PostgreSQL + Redis)",
+      "description": "A full-stack Node.js application with Express, PostgreSQL, and Redis",
+      "version": "1.0.0",
+      "url": "https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/templates/nodejs",
+      "files": [
+        "docker-compose.yml",
+        "Dockerfile",
+        "package.json",
+        "tsconfig.json"
+      ],
+      "tags": ["nodejs", "express", "postgresql", "redis", "typescript"]
+    },
+    "fastapi": {
+      "name": "FastAPI (Python + PostgreSQL)",
+      "description": "A modern Python web application with FastAPI and PostgreSQL",
+      "version": "1.0.0",
+      "url": "https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/templates/fastapi",
+      "files": [
+        "docker-compose.yml",
+        "Dockerfile",
+        "requirements.txt"
+      ],
+      "tags": ["python", "fastapi", "postgresql"]
+    },
+    "nextjs": {
+      "name": "Next.js (React + PostgreSQL)",
+      "description": "A modern React application with Next.js and PostgreSQL",
+      "version": "1.0.0",
+      "url": "https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/templates/nextjs",
+      "files": [
+        "docker-compose.yml",
+        "Dockerfile",
+        "package.json"
+      ],
+      "tags": ["react", "nextjs", "postgresql", "typescript"]
+    }
+  }
+} 

@@ -56,6 +56,7 @@ show_usage() {
     echo "  update [app]           Update all or specific application"
     echo "  backup [app]           Backup application data and volumes"
     echo "  restore <app> <backup> Restore application from backup"
+    echo "  create                 Create a new application from template"
     echo ""
     echo "Options:"
     echo "  -h, --help             Show this help message"
@@ -74,6 +75,27 @@ check_docker() {
     if ! command -v jq &> /dev/null; then
         echo -e "${RED}Error: jq is not installed${NC}"
         exit 1
+    fi
+}
+
+# Function to check if git is installed
+check_git() {
+    if ! command -v git &> /dev/null; then
+        echo -e "${YELLOW}Git is not installed. Would you like to install it? (y/n)${NC}"
+        read -r install_git
+        if [ "$install_git" = "y" ] || [ "$install_git" = "Y" ]; then
+            if command -v apt-get &> /dev/null; then
+                sudo apt-get update && sudo apt-get install -y git
+            elif command -v yum &> /dev/null; then
+                sudo yum install -y git
+            else
+                echo -e "${RED}Error: Could not install git. Please install it manually.${NC}"
+                exit 1
+            fi
+        else
+            echo -e "${RED}Error: Git is required for creating new applications${NC}"
+            exit 1
+        fi
     fi
 }
 
@@ -276,6 +298,149 @@ restore_app() {
     echo -e "${GREEN}Application restored successfully${NC}"
 }
 
+# Function to get available templates
+get_available_templates() {
+    local registry_url="https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/templates/registry.json"
+    if ! command -v curl &> /dev/null; then
+        echo -e "${RED}Error: curl is required for downloading templates${NC}"
+        exit 1
+    fi
+    
+    if ! templates=$(curl -s "$registry_url"); then
+        echo -e "${RED}Error: Could not fetch template registry${NC}"
+        echo "Falling back to local templates..."
+        return 1
+    fi
+    
+    echo "$templates"
+}
+
+# Function to download template
+download_template() {
+    local template_id=$1
+    local destination=$2
+    local templates
+    
+    templates=$(get_available_templates)
+    if [ $? -ne 0 ]; then
+        return 1
+    fi
+    
+    # Extract template info using jq
+    local template_url=$(echo "$templates" | jq -r ".templates.$template_id.url")
+    if [ "$template_url" = "null" ]; then
+        echo -e "${RED}Error: Template '$template_id' not found in registry${NC}"
+        return 1
+    fi
+    
+    # Create template directory
+    mkdir -p "$destination"
+    
+    # Download each file
+    local files=$(echo "$templates" | jq -r ".templates.$template_id.files[]")
+    for file in $files; do
+        echo "Downloading $file..."
+        if ! curl -s "$template_url/$file" -o "$destination/$file"; then
+            echo -e "${RED}Error: Failed to download $file${NC}"
+            return 1
+        fi
+    done
+    
+    return 0
+}
+
+# Function to create a new application
+create_app() {
+    check_git
+    
+    echo -e "${BLUE}=== Create New Application ===${NC}"
+    
+    # Get available templates
+    local templates
+    templates=$(get_available_templates)
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}Error: Could not fetch templates. Please check your internet connection.${NC}"
+        exit 1
+    fi
+    
+    # Display available templates
+    echo "Available templates:"
+    local i=1
+    declare -A template_list
+    while IFS= read -r template_id; do
+        template_list[$i]=$template_id
+        local name=$(echo "$templates" | jq -r ".templates.$template_id.name")
+        local description=$(echo "$templates" | jq -r ".templates.$template_id.description")
+        local tags=$(echo "$templates" | jq -r ".templates.$template_id.tags[]" | tr '\n' ', ' | sed 's/, $//')
+        
+        echo "$i. $name"
+        echo "   $description"
+        echo "   Tags: $tags"
+        echo ""
+        ((i++))
+    done < <(echo "$templates" | jq -r '.templates | keys[]')
+    
+    read -rp "Select template (1-$((i-1))): " template_choice
+    
+    if [ -z "${template_list[$template_choice]}" ]; then
+        echo -e "${RED}Invalid template choice${NC}"
+        exit 1
+    fi
+    
+    local template_id=${template_list[$template_choice]}
+    
+    read -rp "Enter application name: " app_name
+    read -rp "Enter application description: " app_description
+    
+    # Create application directory
+    app_dir="$APPS_DIR/$app_name"
+    if [ -d "$app_dir" ]; then
+        echo -e "${RED}Error: Application directory already exists${NC}"
+        exit 1
+    fi
+    
+    # Download template
+    echo "Downloading template..."
+    if ! download_template "$template_id" "$app_dir"; then
+        echo -e "${RED}Error: Failed to download template${NC}"
+        exit 1
+    fi
+    
+    # Initialize git repository
+    cd "$app_dir" || exit 1
+    git init
+    
+    # Update package.json or requirements.txt with app name and description
+    if [ "$template_id" = "nodejs" ] || [ "$template_id" = "nextjs" ]; then
+        sed -i "s/\"name\": \"nodejs-app\"/\"name\": \"$app_name\"/" package.json
+        sed -i "s/\"description\": \".*\"/\"description\": \"$app_description\"/" package.json
+    elif [ "$template_id" = "fastapi" ]; then
+        echo "# $app_name" > README.md
+        echo "$app_description" >> README.md
+    fi
+    
+    # Create .gitignore
+    cat > .gitignore << EOL
+node_modules/
+.next/
+__pycache__/
+*.pyc
+.env
+.DS_Store
+dist/
+build/
+*.log
+EOL
+    
+    # Initial commit
+    git add .
+    git commit -m "Initial commit: $app_name"
+    
+    echo -e "${GREEN}Application '$app_name' created successfully!${NC}"
+    echo -e "Directory: $app_dir"
+    echo -e "To start the application, run: dcm start $app_name"
+}
+
 # Main script logic
 check_docker
 load_config
@@ -418,6 +583,9 @@ case "$1" in
         ;;
     restore)
         restore_app "$2" "$3"
+        ;;
+    create)
+        create_app
         ;;
     -h|--help)
         show_usage
