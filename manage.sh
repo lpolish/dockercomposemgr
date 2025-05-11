@@ -396,16 +396,32 @@ create_app() {
     fi
 
     template=${templates[$((template_choice-1))]}
-    template_dir="$(dirname "$0")/templates/$template"
-
-    # Check if template directory exists
-    if [ ! -d "$template_dir" ]; then
-        echo "Error: Template directory not found at $template_dir"
+    
+    # Get template registry
+    echo "Fetching template registry..."
+    registry_url="https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/templates/registry.json"
+    if ! templates_json=$(curl -s "$registry_url"); then
+        echo -e "${RED}Error: Could not fetch template registry${NC}"
         return 1
     fi
 
-    # Copy template files
-    cp -r "$template_dir"/* "$app_dir/"
+    # Extract template info
+    template_url=$(echo "$templates_json" | jq -r ".templates.$template.url")
+    if [ "$template_url" = "null" ]; then
+        echo -e "${RED}Error: Template '$template' not found in registry${NC}"
+        return 1
+    fi
+
+    # Download template files
+    echo "Downloading template files..."
+    files=$(echo "$templates_json" | jq -r ".templates.$template.files[]")
+    for file in $files; do
+        echo "Downloading $file..."
+        if ! curl -s "$template_url/$file" -o "$app_dir/$file"; then
+            echo -e "${RED}Error: Failed to download $file${NC}"
+            return 1
+        fi
+    done
 
     # Initialize git repository
     cd "$app_dir" || return 1
@@ -424,7 +440,7 @@ create_app() {
         mv requirements.txt.new requirements.txt
     fi
 
-    echo "Application created successfully in $app_dir"
+    echo -e "${GREEN}Application created successfully in $app_dir${NC}"
     echo "You can now start developing your application"
 }
 
