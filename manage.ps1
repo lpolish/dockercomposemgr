@@ -87,6 +87,9 @@ function Check-Git {
         git config --global user.email $gitEmail
         Write-Host "Git has been configured globally with your information."
     }
+
+    # Set default branch to main
+    git config --global init.defaultBranch main
 }
 
 # Function to get available templates
@@ -188,7 +191,13 @@ function Create-App {
     }
 
     $template = $templates[$templateChoice - 1]
-    $templateDir = Join-Path $scriptDir "templates\$template"
+    $templateDir = Join-Path $PSScriptRoot "templates\$template"
+
+    # Check if template directory exists
+    if (-not (Test-Path $templateDir)) {
+        Write-Host "Error: Template directory not found at $templateDir"
+        return
+    }
 
     # Copy template files
     Copy-Item -Path "$templateDir\*" -Destination $appDir -Recurse
@@ -196,7 +205,6 @@ function Create-App {
     # Initialize git repository
     Set-Location $appDir
     git init
-    git checkout -b main
     git add .
     git commit -m "Initial commit"
 

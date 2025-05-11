@@ -95,6 +95,9 @@ check_git() {
         git config --global user.email "$git_email"
         echo "Git has been configured globally with your information."
     fi
+
+    # Set default branch to main
+    git config --global init.defaultBranch main
 }
 
 # Function to list all managed applications
@@ -393,7 +396,13 @@ create_app() {
     fi
 
     template=${templates[$((template_choice-1))]}
-    template_dir="$SCRIPT_DIR/templates/$template"
+    template_dir="$(dirname "$0")/templates/$template"
+
+    # Check if template directory exists
+    if [ ! -d "$template_dir" ]; then
+        echo "Error: Template directory not found at $template_dir"
+        return 1
+    fi
 
     # Copy template files
     cp -r "$template_dir"/* "$app_dir/"
@@ -401,7 +410,6 @@ create_app() {
     # Initialize git repository
     cd "$app_dir" || return 1
     git init
-    git checkout -b main
     git add .
     git commit -m "Initial commit"
 
