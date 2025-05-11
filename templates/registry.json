@@ -9,7 +9,19 @@
         "docker-compose.yml",
         "Dockerfile",
         "package.json",
-        "tsconfig.json"
+        "tsconfig.json",
+        "src/app.ts",
+        "src/routes/index.ts",
+        "src/routes/users.ts",
+        "src/controllers/userController.ts",
+        "src/models/User.ts",
+        "src/config/database.ts",
+        "src/config/redis.ts",
+        "src/middleware/auth.ts",
+        "src/utils/logger.ts",
+        "src/types/index.ts",
+        ".env.example",
+        "README.md"
       ],
       "tags": ["nodejs", "express", "postgresql", "redis", "typescript"]
     },
@@ -21,7 +33,18 @@
       "files": [
         "docker-compose.yml",
         "Dockerfile",
-        "requirements.txt"
+        "requirements.txt",
+        "app/main.py",
+        "app/database.py",
+        "app/models/user.py",
+        "app/schemas/user.py",
+        "app/routers/users.py",
+        "app/core/config.py",
+        "app/core/security.py",
+        "app/middleware/cors.py",
+        "app/utils/logger.py",
+        ".env.example",
+        "README.md"
       ],
       "tags": ["python", "fastapi", "postgresql"]
     },
@@ -33,9 +56,72 @@
       "files": [
         "docker-compose.yml",
         "Dockerfile",
-        "package.json"
+        "package.json",
+        "tsconfig.json",
+        "src/app/layout.tsx",
+        "src/app/page.tsx",
+        "src/app/api/route.ts",
+        "src/components/ui/Button.tsx",
+        "src/components/ui/Card.tsx",
+        "src/components/layout/Header.tsx",
+        "src/components/layout/Footer.tsx",
+        "src/lib/db.ts",
+        "src/lib/auth.ts",
+        "src/types/index.ts",
+        "src/styles/globals.css",
+        ".env.example",
+        "README.md"
       ],
       "tags": ["react", "nextjs", "postgresql", "typescript"]
+    },
+    "go": {
+      "name": "Go (Gin + PostgreSQL)",
+      "description": "A modern Go application with Gin framework and PostgreSQL",
+      "version": "1.0.0",
+      "url": "https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/templates/go",
+      "files": [
+        "docker-compose.yml",
+        "Dockerfile",
+        "go.mod",
+        "go.sum",
+        "main.go",
+        "internal/api/routes.go",
+        "internal/api/handlers/user.go",
+        "internal/models/user.go",
+        "internal/database/postgres.go",
+        "internal/middleware/auth.go",
+        "internal/config/config.go",
+        "internal/utils/logger.go",
+        ".env.example",
+        "README.md"
+      ],
+      "tags": ["go", "gin", "postgresql"]
+    },
+    "ruby": {
+      "name": "Ruby (Rails + PostgreSQL)",
+      "description": "A modern Ruby on Rails application with PostgreSQL",
+      "version": "1.0.0",
+      "url": "https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/templates/ruby",
+      "files": [
+        "docker-compose.yml",
+        "Dockerfile",
+        "Gemfile",
+        "config/database.yml",
+        "config/routes.rb",
+        "app/controllers/application_controller.rb",
+        "app/controllers/users_controller.rb",
+        "app/models/user.rb",
+        "app/views/layouts/application.html.erb",
+        "app/views/users/index.html.erb",
+        "app/views/users/show.html.erb",
+        "app/helpers/application_helper.rb",
+        "app/mailers/application_mailer.rb",
+        "config/initializers/cors.rb",
+        "config/initializers/redis.rb",
+        ".env.example",
+        "README.md"
+      ],
+      "tags": ["ruby", "rails", "postgresql"]
     }
   }
 } 
