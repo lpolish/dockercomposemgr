@@ -57,6 +57,7 @@ show_usage() {
     echo "  backup [app]           Backup application data and volumes"
     echo "  restore <app> <backup> Restore application from backup"
     echo "  create                 Create a new application from template"
+    echo "  clone <repo_url> <app_name> Clone and add application"
     echo ""
     echo "Options:"
     echo "  -h, --help             Show this help message"
@@ -444,6 +445,54 @@ create_app() {
     echo "You can now start developing your application"
 }
 
+# Function to clone and add application
+clone_app() {
+    local repo_url=$1
+    local app_name=$2
+
+    if [ -z "$repo_url" ] || [ -z "$app_name" ]; then
+        echo -e "${RED}Error: Repository URL and application name required${NC}"
+        echo "Usage: dcm clone <repo_url> <app_name>"
+        exit 1
+    fi
+
+    # Create temporary directory
+    local temp_dir=$(mktemp -d)
+    
+    echo "Cloning repository..."
+    if ! git clone "$repo_url" "$temp_dir"; then
+        echo -e "${RED}Error: Failed to clone repository${NC}"
+        rm -rf "$temp_dir"
+        exit 1
+    fi
+
+    # Check if docker-compose.yml exists
+    if [ ! -f "$temp_dir/docker-compose.yml" ]; then
+        echo -e "${RED}Error: Repository does not contain a docker-compose.yml file${NC}"
+        rm -rf "$temp_dir"
+        exit 1
+    fi
+
+    # Create application directory
+    mkdir -p "$APPS_DIR/$app_name"
+
+    # Copy docker-compose.yml and .env if it exists
+    cp "$temp_dir/docker-compose.yml" "$APPS_DIR/$app_name/"
+    if [ -f "$temp_dir/.env" ]; then
+        cp "$temp_dir/.env" "$APPS_DIR/$app_name/"
+    fi
+
+    # Copy any other relevant files (README.md, etc.)
+    if [ -f "$temp_dir/README.md" ]; then
+        cp "$temp_dir/README.md" "$APPS_DIR/$app_name/"
+    fi
+
+    # Cleanup
+    rm -rf "$temp_dir"
+
+    echo -e "${GREEN}Application '$app_name' cloned and added successfully${NC}"
+}
+
 # Main script logic
 check_docker
 load_config
@@ -546,6 +595,9 @@ case "$1" in
             cp "$3/.env" "$APPS_DIR/$2/"
         fi
         echo -e "${GREEN}Application '$2' added successfully${NC}"
+        ;;
+    clone)
+        clone_app "$2" "$3"
         ;;
     remove)
         if [ -z "$2" ]; then

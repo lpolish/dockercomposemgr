@@ -52,6 +52,7 @@ function Show-Usage {
     Write-Host "  backup [app]           Backup application data and volumes"
     Write-Host "  restore <app> <backup> Restore application from backup"
     Write-Host "  create                 Create a new application from template"
+    Write-Host "  clone <repo_url> <app_name> Clone a repository and add it as an application"
     Write-Host ""
     Write-Host "Options:"
     Write-Host "  -h, --help             Show this help message"
@@ -439,6 +440,60 @@ function Restore-Application {
     Write-Host "Application restored successfully" -ForegroundColor $Green
 }
 
+# Function to clone a repository and add it as an application
+function Clone-App {
+    param (
+        [string]$RepoUrl,
+        [string]$AppName
+    )
+    
+    if ([string]::IsNullOrEmpty($RepoUrl) -or [string]::IsNullOrEmpty($AppName)) {
+        Write-Host "Error: Repository URL and application name required" -ForegroundColor $Red
+        Write-Host "Usage: dcm clone <repo_url> <app_name>"
+        exit 1
+    }
+
+    # Create temporary directory
+    $tempDir = Join-Path $env:TEMP ([System.Guid]::NewGuid().ToString())
+    New-Item -ItemType Directory -Force -Path $tempDir | Out-Null
+    
+    Write-Host "Cloning repository..."
+    try {
+        git clone $RepoUrl $tempDir
+    }
+    catch {
+        Write-Host "Error: Failed to clone repository" -ForegroundColor $Red
+        Remove-Item -Path $tempDir -Recurse -Force
+        exit 1
+    }
+
+    # Check if docker-compose.yml exists
+    if (-not (Test-Path "$tempDir\docker-compose.yml")) {
+        Write-Host "Error: Repository does not contain a docker-compose.yml file" -ForegroundColor $Red
+        Remove-Item -Path $tempDir -Recurse -Force
+        exit 1
+    }
+
+    # Create application directory
+    New-Item -ItemType Directory -Force -Path "$script:AppsDir\$AppName" | Out-Null
+
+    # Copy docker-compose.yml and .env if it exists
+    Copy-Item "$tempDir\docker-compose.yml" "$script:AppsDir\$AppName\"
+    if (Test-Path "$tempDir\.env") {
+        Copy-Item "$tempDir\.env" "$script:AppsDir\$AppName\"
+    }
+
+    # Copy any other relevant files (README.md, etc.)
+    if (Test-Path "$tempDir\README.md") {
+        Copy-Item "$tempDir\README.md" "$script:AppsDir\$AppName\"
+    }
+
+    # Cleanup
+    Remove-Item -Path $tempDir -Recurse -Force
+
+    Write-Host "Application '$AppName' cloned and added successfully" -ForegroundColor $Green
+}
+
 # Main script logic
 Test-Docker
 Load-Config
@@ -533,6 +588,9 @@ switch ($args[0]) {
             Copy-Item "$($args[2])\.env" "$script:AppsDir\$($args[1])\"
         }
         Write-Host "Application '$($args[1])' added successfully" -ForegroundColor $Green
+    }
+    "clone" {
+        Clone-App $args[1] $args[2]
     }
     "remove" {
         if (-not $args[1]) {

@@ -68,6 +68,9 @@ Use the `dcm` command to manage your applications:
 # Add a new application
 dcm add myapp /path/to/docker-compose.yml
 
+# Clone and add a repository as an application
+dcm clone https://github.com/username/repo.git myapp
+
 # Start an application
 dcm start myapp
 
@@ -77,6 +80,27 @@ dcm status myapp
 # View application logs
 dcm logs myapp
 ```
+
+### Cloning Applications
+
+The `clone` command makes it easy to add existing Docker Compose applications from Git repositories:
+
+```bash
+# Clone a repository and add it as a managed application
+dcm clone <repository_url> <app_name>
+```
+
+The command will:
+1. Clone the repository
+2. Check if it contains a `docker-compose.yml` file
+3. If found, add it to your managed apps
+4. Copy any relevant configuration files (`.env`, `README.md`)
+5. Clean up temporary files
+
+This is particularly useful for:
+- Adding applications from public repositories
+- Cloning your own repositories
+- Quickly setting up pre-configured Docker Compose applications
 
 ## Configuration
 
