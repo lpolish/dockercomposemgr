@@ -72,21 +72,20 @@ function Test-Docker {
 # Function to check if git is installed
 function Check-Git {
     if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-        Write-Host "Git is not installed. Would you like to install it? (y/n)" -ForegroundColor Yellow
-        $installGit = Read-Host
-        if ($installGit -eq 'y' -or $installGit -eq 'Y') {
-            if (Get-Command winget -ErrorAction SilentlyContinue) {
-                winget install --id Git.Git -e --source winget
-            } elseif (Get-Command choco -ErrorAction SilentlyContinue) {
-                choco install git -y
-            } else {
-                Write-Host "Error: Could not install git. Please install it manually from https://git-scm.com/download/win" -ForegroundColor Red
-                exit 1
-            }
-        } else {
-            Write-Host "Error: Git is required for creating new applications" -ForegroundColor Red
-            exit 1
-        }
+        Write-Host "Git is not installed. Please install Git first."
+        exit 1
+    }
+
+    # Check if Git is configured
+    if ([string]::IsNullOrEmpty((git config --global user.name)) -or 
+        [string]::IsNullOrEmpty((git config --global user.email))) {
+        Write-Host "Git is not configured. Let's set it up globally."
+        $gitName = Read-Host "Enter your name for Git"
+        $gitEmail = Read-Host "Enter your email for Git"
+        
+        git config --global user.name $gitName
+        git config --global user.email $gitEmail
+        Write-Host "Git has been configured globally with your information."
     }
 }
 
@@ -143,89 +142,79 @@ function Download-Template {
 # Function to create a new application
 function Create-App {
     Check-Git
-    
-    Write-Host "=== Create New Application ===" -ForegroundColor Blue
-    
-    # Get available templates
-    $templates = Get-AvailableTemplates
-    if (-not $templates) {
-        Write-Host "Error: Could not fetch templates. Please check your internet connection." -ForegroundColor $Red
-        exit 1
-    }
-    
-    # Display available templates
-    Write-Host "Available templates:"
-    $i = 1
-    $templateList = @{}
-    foreach ($template in $templates.PSObject.Properties) {
-        $templateList[$i] = $template.Name
-        Write-Host "$i. $($template.Value.name)"
-        Write-Host "   $($template.Value.description)"
-        Write-Host "   Tags: $($template.Value.tags -join ', ')"
-        Write-Host ""
-        $i++
-    }
-    
-    $templateChoice = Read-Host "Select template (1-$($i-1))"
-    if (-not $templateList.ContainsKey([int]$templateChoice)) {
-        Write-Host "Invalid template choice" -ForegroundColor $Red
-        exit 1
-    }
-    
-    $templateId = $templateList[[int]$templateChoice]
-    $template = $templates.$templateId
-    
+
+    # Get app name
     $appName = Read-Host "Enter application name"
+    if ([string]::IsNullOrEmpty($appName)) {
+        Write-Host "Application name cannot be empty"
+        return
+    }
+
+    # Get app description
     $appDescription = Read-Host "Enter application description"
-    
-    # Create application directory
-    $appDir = Join-Path $script:AppsDir $appName
+    if ([string]::IsNullOrEmpty($appDescription)) {
+        Write-Host "Application description cannot be empty"
+        return
+    }
+
+    # Get app directory
+    $defaultDir = Join-Path (Get-Location) $appName
+    $appDir = Read-Host "Enter application directory (default: $defaultDir)"
+    if ([string]::IsNullOrEmpty($appDir)) {
+        $appDir = $defaultDir
+    }
+
+    # Check if directory exists
     if (Test-Path $appDir) {
-        Write-Host "Error: Application directory already exists" -ForegroundColor $Red
-        exit 1
+        Write-Host "Directory $appDir already exists"
+        return
     }
-    
-    # Download template
-    Write-Host "Downloading template..."
-    if (-not (Download-Template -TemplateId $templateId -Destination $appDir)) {
-        Write-Host "Error: Failed to download template" -ForegroundColor $Red
-        exit 1
+
+    # Create directory
+    New-Item -ItemType Directory -Path $appDir | Out-Null
+
+    # Get available templates
+    $templates = @("nodejs", "fastapi", "nextjs")
+    Write-Host "Available templates:"
+    for ($i = 0; $i -lt $templates.Count; $i++) {
+        Write-Host "$($i+1). $($templates[$i])"
     }
-    
+
+    # Get template choice
+    $templateChoice = Read-Host "Select template (1-$($templates.Count))"
+    if ($templateChoice -notmatch "^[1-$($templates.Count)]$") {
+        Write-Host "Invalid template choice"
+        return
+    }
+
+    $template = $templates[$templateChoice - 1]
+    $templateDir = Join-Path $scriptDir "templates\$template"
+
+    # Copy template files
+    Copy-Item -Path "$templateDir\*" -Destination $appDir -Recurse
+
     # Initialize git repository
     Set-Location $appDir
     git init
-    
+    git checkout -b main
+    git add .
+    git commit -m "Initial commit"
+
     # Update package.json or requirements.txt with app name and description
-    if ($templateId -eq "nodejs" -or $templateId -eq "nextjs") {
+    if (Test-Path "package.json") {
         $packageJson = Get-Content "package.json" -Raw | ConvertFrom-Json
         $packageJson.name = $appName
         $packageJson.description = $appDescription
-        $packageJson | ConvertTo-Json -Depth 10 | Set-Content "package.json"
-    } elseif ($templateId -eq "fastapi") {
-        Set-Content -Path "README.md" -Value "# $appName`n$appDescription"
+        $packageJson | ConvertTo-Json | Set-Content "package.json"
     }
-    
-    # Create .gitignore
-    @"
-node_modules/
-.next/
-__pycache__/
-*.pyc
-.env
-.DS_Store
-dist/
-build/
-*.log
-"@ | Set-Content ".gitignore"
-    
-    # Initial commit
-    git add .
-    git commit -m "Initial commit: $appName"
-    
-    Write-Host "Application '$appName' created successfully!" -ForegroundColor Green
-    Write-Host "Directory: $appDir"
-    Write-Host "To start the application, run: dcm start $appName"
+    elseif (Test-Path "requirements.txt") {
+        $requirements = Get-Content "requirements.txt"
+        Set-Content "requirements.txt" -Value "# $appName", "# $appDescription"
+        Add-Content "requirements.txt" -Value $requirements
+    }
+
+    Write-Host "Application created successfully in $appDir"
+    Write-Host "You can now start developing your application"
 }
 
 # Function to list all managed applications

@@ -81,21 +81,19 @@ check_docker() {
 # Function to check if git is installed
 check_git() {
     if ! command -v git &> /dev/null; then
-        echo -e "${YELLOW}Git is not installed. Would you like to install it? (y/n)${NC}"
-        read -r install_git
-        if [ "$install_git" = "y" ] || [ "$install_git" = "Y" ]; then
-            if command -v apt-get &> /dev/null; then
-                sudo apt-get update && sudo apt-get install -y git
-            elif command -v yum &> /dev/null; then
-                sudo yum install -y git
-            else
-                echo -e "${RED}Error: Could not install git. Please install it manually.${NC}"
-                exit 1
-            fi
-        else
-            echo -e "${RED}Error: Git is required for creating new applications${NC}"
-            exit 1
-        fi
+        echo "Git is not installed. Please install Git first."
+        exit 1
+    fi
+
+    # Check if Git is configured
+    if [ -z "$(git config --global user.name)" ] || [ -z "$(git config --global user.email)" ]; then
+        echo "Git is not configured. Let's set it up globally."
+        read -p "Enter your name for Git: " git_name
+        read -p "Enter your email for Git: " git_email
+        
+        git config --global user.name "$git_name"
+        git config --global user.email "$git_email"
+        echo "Git has been configured globally with your information."
     fi
 }
 
@@ -352,93 +350,74 @@ download_template() {
 # Function to create a new application
 create_app() {
     check_git
-    
-    echo -e "${BLUE}=== Create New Application ===${NC}"
-    
-    # Get available templates
-    local templates
-    templates=$(get_available_templates)
-    if [ $? -ne 0 ]; then
-        echo -e "${RED}Error: Could not fetch templates. Please check your internet connection.${NC}"
-        exit 1
+
+    # Get app name
+    read -p "Enter application name: " app_name
+    if [ -z "$app_name" ]; then
+        echo "Application name cannot be empty"
+        return 1
     fi
-    
-    # Display available templates
-    echo "Available templates:"
-    local i=1
-    declare -A template_list
-    while IFS= read -r template_id; do
-        template_list[$i]=$template_id
-        local name=$(echo "$templates" | jq -r ".templates.$template_id.name")
-        local description=$(echo "$templates" | jq -r ".templates.$template_id.description")
-        local tags=$(echo "$templates" | jq -r ".templates.$template_id.tags[]" | tr '\n' ', ' | sed 's/, $//')
-        
-        echo "$i. $name"
-        echo "   $description"
-        echo "   Tags: $tags"
-        echo ""
-        ((i++))
-    done < <(echo "$templates" | jq -r '.templates | keys[]')
-    
-    read -rp "Select template (1-$((i-1))): " template_choice
-    
-    if [ -z "${template_list[$template_choice]}" ]; then
-        echo -e "${RED}Invalid template choice${NC}"
-        exit 1
+
+    # Get app description
+    read -p "Enter application description: " app_description
+    if [ -z "$app_description" ]; then
+        echo "Application description cannot be empty"
+        return 1
     fi
-    
-    local template_id=${template_list[$template_choice]}
-    
-    read -rp "Enter application name: " app_name
-    read -rp "Enter application description: " app_description
-    
-    # Create application directory
-    app_dir="$APPS_DIR/$app_name"
+
+    # Get app directory
+    read -p "Enter application directory (default: ./$app_name): " app_dir
+    app_dir=${app_dir:-"./$app_name"}
+
+    # Check if directory exists
     if [ -d "$app_dir" ]; then
-        echo -e "${RED}Error: Application directory already exists${NC}"
-        exit 1
+        echo "Directory $app_dir already exists"
+        return 1
     fi
-    
-    # Download template
-    echo "Downloading template..."
-    if ! download_template "$template_id" "$app_dir"; then
-        echo -e "${RED}Error: Failed to download template${NC}"
-        exit 1
+
+    # Create directory
+    mkdir -p "$app_dir"
+
+    # Get available templates
+    templates=("nodejs" "fastapi" "nextjs")
+    echo "Available templates:"
+    for i in "${!templates[@]}"; do
+        echo "$((i+1)). ${templates[$i]}"
+    done
+
+    # Get template choice
+    read -p "Select template (1-${#templates[@]}): " template_choice
+    if ! [[ "$template_choice" =~ ^[1-${#templates[@]}]$ ]]; then
+        echo "Invalid template choice"
+        return 1
     fi
-    
+
+    template=${templates[$((template_choice-1))]}
+    template_dir="$SCRIPT_DIR/templates/$template"
+
+    # Copy template files
+    cp -r "$template_dir"/* "$app_dir/"
+
     # Initialize git repository
-    cd "$app_dir" || exit 1
+    cd "$app_dir" || return 1
     git init
-    
-    # Update package.json or requirements.txt with app name and description
-    if [ "$template_id" = "nodejs" ] || [ "$template_id" = "nextjs" ]; then
-        sed -i "s/\"name\": \"nodejs-app\"/\"name\": \"$app_name\"/" package.json
-        sed -i "s/\"description\": \".*\"/\"description\": \"$app_description\"/" package.json
-    elif [ "$template_id" = "fastapi" ]; then
-        echo "# $app_name" > README.md
-        echo "$app_description" >> README.md
-    fi
-    
-    # Create .gitignore
-    cat > .gitignore << EOL
-node_modules/
-.next/
-__pycache__/
-*.pyc
-.env
-.DS_Store
-dist/
-build/
-*.log
-EOL
-    
-    # Initial commit
+    git checkout -b main
     git add .
-    git commit -m "Initial commit: $app_name"
-    
-    echo -e "${GREEN}Application '$app_name' created successfully!${NC}"
-    echo -e "Directory: $app_dir"
-    echo -e "To start the application, run: dcm start $app_name"
+    git commit -m "Initial commit"
+
+    # Update package.json or requirements.txt with app name and description
+    if [ -f "package.json" ]; then
+        sed -i "s/\"name\": \".*\"/\"name\": \"$app_name\"/" package.json
+        sed -i "s/\"description\": \".*\"/\"description\": \"$app_description\"/" package.json
+    elif [ -f "requirements.txt" ]; then
+        echo "# $app_name" > requirements.txt.new
+        echo "# $app_description" >> requirements.txt.new
+        cat requirements.txt >> requirements.txt.new
+        mv requirements.txt.new requirements.txt
+    fi
+
+    echo "Application created successfully in $app_dir"
+    echo "You can now start developing your application"
 }
 
 # Main script logic
