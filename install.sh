@@ -1,246 +1,268 @@
 #!/bin/bash
 
-# Installation script for Docker Compose Manager
+# Docker Compose Manager Installer for Linux
+# A command-line tool for managing Docker Compose applications
 
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Installation paths
-DEFAULT_INSTALL_DIR="/usr/local/bin"
-USER_INSTALL_DIR="$HOME/.local/bin"
-SCRIPT_NAME="dcm"
-REPO_URL="https://raw.githubusercontent.com/lpolish/dockercomposemgr/main"
-TEMP_DIR="/tmp/dockercomposemgr_install"
+INSTALL_DIR="/usr/local/bin"
 CONFIG_DIR="$HOME/.config/dockercomposemgr"
 DEFAULT_APPS_DIR="$HOME/dockerapps"
 
 # Function to display usage
 show_usage() {
     echo "Docker Compose Manager Installer"
-    echo "Usage: bash <(curl -fsSL https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/install.sh) [option]"
-    echo "       ./install.sh [option]"
+    echo "Usage: $0 [options]"
     echo ""
     echo "Options:"
-    echo "  install     Install Docker Compose Manager"
-    echo "  uninstall   Uninstall Docker Compose Manager"
-    echo "  -h, --help  Show this help message"
+    echo "  -h, --help     Show this help message"
+    echo "  -u, --uninstall Remove Docker Compose Manager"
 }
 
-# Function to check prerequisites
-check_prerequisites() {
-    if ! command -v docker &> /dev/null; then
-        echo -e "${RED}Error: Docker is not installed${NC}"
-        exit 1
-    fi
-    if ! command -v docker compose &> /dev/null; then
-        echo -e "${RED}Error: Docker Compose is not installed${NC}"
-        exit 1
-    fi
-    if ! command -v curl &> /dev/null; then
-        echo -e "${RED}Error: curl is not installed${NC}"
-        exit 1
-    fi
-    if ! command -v jq &> /dev/null; then
-        echo -e "${RED}Error: jq is not installed${NC}"
+# Function to check if running as root
+check_root() {
+    if [ "$EUID" -ne 0 ]; then
+        echo -e "${RED}Error: This script needs to be run as root${NC}"
+        echo "Please run: sudo $0"
         exit 1
     fi
 }
 
-# Function to download file
-download_file() {
-    local url="$1"
-    local output="$2"
-    if ! curl -fsSL "$url" -o "$output"; then
-        echo -e "${RED}Error: Failed to download $url${NC}"
-        return 1
+# Function to detect Linux distribution
+detect_distro() {
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        OS=$NAME
+        VER=$VERSION_ID
+    else
+        echo -e "${RED}Error: Could not detect Linux distribution${NC}"
+        exit 1
     fi
-    return 0
+}
+
+# Function to install Docker
+install_docker() {
+    echo -e "${BLUE}Installing Docker...${NC}"
+    
+    case $OS in
+        "Ubuntu"|"Debian GNU/Linux")
+            # Remove old versions
+            apt-get remove -y docker docker-engine docker.io containerd runc
+            
+            # Update package index
+            apt-get update
+            
+            # Install prerequisites
+            apt-get install -y \
+                apt-transport-https \
+                ca-certificates \
+                curl \
+                gnupg \
+                lsb-release \
+                jq
+            
+            # Add Docker's official GPG key
+            curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+            
+            # Set up the stable repository
+            echo \
+                "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \
+                $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+            
+            # Install Docker Engine
+            apt-get update
+            apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+            
+            # Add current user to docker group
+            usermod -aG docker $SUDO_USER
+            ;;
+            
+        "CentOS Linux"|"Red Hat Enterprise Linux")
+            # Remove old versions
+            yum remove -y docker docker-client docker-client-latest docker-common docker-latest docker-latest-logrotate docker-logrotate docker-engine
+            
+            # Install prerequisites
+            yum install -y yum-utils jq
+            
+            # Add Docker repository
+            yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+            
+            # Install Docker Engine
+            yum install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+            
+            # Start and enable Docker
+            systemctl start docker
+            systemctl enable docker
+            
+            # Add current user to docker group
+            usermod -aG docker $SUDO_USER
+            ;;
+            
+        *)
+            echo -e "${RED}Error: Unsupported Linux distribution${NC}"
+            exit 1
+            ;;
+    esac
+    
+    echo -e "${GREEN}Docker installed successfully${NC}"
 }
 
 # Function to create default configuration
 create_default_config() {
-    local config_file="$CONFIG_DIR/config.json"
-    local apps_file="$CONFIG_DIR/apps.json"
+    echo -e "${BLUE}Creating default configuration...${NC}"
     
     # Create config directory
-    mkdir -p "$CONFIG_DIR/logs"
+    mkdir -p "$CONFIG_DIR"
     
-    # Create default config if it doesn't exist
-    if [ ! -f "$config_file" ]; then
-        cat > "$config_file" << EOF
+    # Create config.json if it doesn't exist
+    if [ ! -f "$CONFIG_DIR/config.json" ]; then
+        cat > "$CONFIG_DIR/config.json" << EOF
 {
-    "version": "1.0.0",
     "apps_directory": "$DEFAULT_APPS_DIR",
     "log_level": "info",
-    "log_retention_days": 30,
-    "default_timeout": 300,
-    "notifications": {
-        "enabled": true,
-        "on_start": true,
-        "on_stop": true,
-        "on_error": true
-    },
+    "log_retention_days": 7,
     "backup": {
-        "enabled": true,
-        "directory": "$DEFAULT_APPS_DIR/backups",
-        "retention_days": 7,
-        "include_volumes": true
-    },
-    "update": {
-        "check_interval_hours": 24,
-        "auto_update": false
+        "include_volumes": true,
+        "retention_days": 30
     }
 }
 EOF
     fi
     
-    # Create apps registry if it doesn't exist
-    if [ ! -f "$apps_file" ]; then
-        cat > "$apps_file" << EOF
+    # Create apps.json if it doesn't exist
+    if [ ! -f "$CONFIG_DIR/apps.json" ]; then
+        cat > "$CONFIG_DIR/apps.json" << EOF
 {
-    "version": "1.0.0",
-    "apps": {},
-    "last_updated": null
+    "apps": {}
 }
 EOF
     fi
+    
+    echo -e "${GREEN}Default configuration created successfully${NC}"
 }
 
 # Function to create apps directory structure
 create_apps_directory() {
-    local apps_dir="$DEFAULT_APPS_DIR"
+    echo -e "${BLUE}Creating apps directory structure...${NC}"
     
     # Create apps directory
-    mkdir -p "$apps_dir/backups"
+    mkdir -p "$DEFAULT_APPS_DIR/backups"
     
     # Create README if it doesn't exist
-    if [ ! -f "$apps_dir/README.md" ]; then
-        cat > "$apps_dir/README.md" << EOF
-# Docker Apps Directory
+    if [ ! -f "$DEFAULT_APPS_DIR/README.md" ]; then
+        cat > "$DEFAULT_APPS_DIR/README.md" << EOF
+# Docker Applications Directory
 
-This directory is where you'll store your Docker Compose applications. Each application should be in its own subdirectory.
+This directory contains your Docker Compose applications managed by Docker Compose Manager.
 
 ## Directory Structure
 
+Each application should be in its own subdirectory with the following structure:
+
 \`\`\`
-$apps_dir/
-├── app1/                  # Application directory
-│   ├── docker-compose.yml # Docker Compose configuration
-│   ├── .env              # Environment variables (optional)
-│   ├── data/             # Persistent data (if needed)
-│   └── README.md         # Application documentation
-├── app2/
-│   └── ...
-└── backups/              # Backup directory (managed by dcm)
+app_name/
+├── docker-compose.yml    # Docker Compose configuration
+├── .env                  # Environment variables (optional)
+└── data/                # Application data (optional)
 \`\`\`
 
-For more information, run: dcm --help
+## Best Practices
+
+1. Keep each application in its own directory
+2. Use descriptive names for applications
+3. Include a README.md in each application directory
+4. Store sensitive data in .env files
+5. Use named volumes for persistent data
+
+## Managing Applications
+
+Use the \`dcm\` command to manage your applications:
+
+\`\`\`bash
+# List all applications
+dcm list
+
+# Start an application
+dcm start app_name
+
+# Stop an application
+dcm stop app_name
+
+# View application logs
+dcm logs app_name
+
+# Add a new application
+dcm add app_name /path/to/docker-compose.yml
+
+# Remove an application
+dcm remove app_name
+\`\`\`
 EOF
     fi
+    
+    echo -e "${GREEN}Apps directory structure created successfully${NC}"
 }
 
-# Function to install
+# Function to install Docker Compose Manager
 install() {
-    echo -e "${YELLOW}Installing Docker Compose Manager...${NC}"
+    echo -e "${BLUE}Installing Docker Compose Manager...${NC}"
     
-    # Create temporary directory
-    rm -rf "$TEMP_DIR"
-    mkdir -p "$TEMP_DIR"
+    # Check if running as root
+    check_root
     
-    # Download required files
-    echo "Downloading required files..."
-    if ! download_file "$REPO_URL/manage.sh" "$TEMP_DIR/manage.sh"; then
-        rm -rf "$TEMP_DIR"
-        exit 1
-    fi
+    # Detect Linux distribution
+    detect_distro
     
-    # Determine install location
-    if [ "$EUID" -eq 0 ]; then
-        INSTALL_DIR="$DEFAULT_INSTALL_DIR"
-    else
-        INSTALL_DIR="$USER_INSTALL_DIR"
-        mkdir -p "$INSTALL_DIR"
-    fi
+    # Install Docker and dependencies
+    install_docker
     
-    # Install the script
-    echo "Installing files to $INSTALL_DIR..."
-    if ! cp "$TEMP_DIR/manage.sh" "$INSTALL_DIR/$SCRIPT_NAME"; then
-        echo -e "${RED}Error: Failed to copy files${NC}"
-        rm -rf "$TEMP_DIR"
-        exit 1
-    fi
-    chmod +x "$INSTALL_DIR/$SCRIPT_NAME"
+    # Download management script
+    echo -e "${BLUE}Downloading management script...${NC}"
+    curl -fsSL https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/manage.sh -o "$INSTALL_DIR/dcm"
+    chmod +x "$INSTALL_DIR/dcm"
     
-    # Create configuration and apps directory structure
+    # Create default configuration
     create_default_config
+    
+    # Create apps directory structure
     create_apps_directory
     
-    # Cleanup
-    rm -rf "$TEMP_DIR"
-    
-    echo -e "${GREEN}Installation complete!${NC}"
-    echo "You can now use the 'dcm' command to manage your Docker Compose applications."
-    echo "Run 'dcm --help' to see available commands."
-    
-    # Check if user bin is in PATH
-    if [ "$INSTALL_DIR" = "$USER_INSTALL_DIR" ]; then
-        case ":$PATH:" in
-            *":$USER_INSTALL_DIR:"*) :;;
-            *)
-                echo -e "${YELLOW}Warning: $USER_INSTALL_DIR is not in your PATH.${NC}"
-                echo "Add the following line to your shell profile (e.g., ~/.bashrc):"
-                echo "  export PATH=\"$USER_INSTALL_DIR:\$PATH\""
-                ;;
-        esac
-    fi
+    echo -e "${GREEN}Docker Compose Manager installed successfully${NC}"
+    echo -e "${YELLOW}Please log out and log back in for Docker group changes to take effect${NC}"
 }
 
-# Function to uninstall
+# Function to uninstall Docker Compose Manager
 uninstall() {
-    echo -e "${YELLOW}Uninstalling Docker Compose Manager...${NC}"
+    echo -e "${BLUE}Uninstalling Docker Compose Manager...${NC}"
     
-    # Remove binary from both locations
-    rm -f "$DEFAULT_INSTALL_DIR/$SCRIPT_NAME"
-    rm -f "$USER_INSTALL_DIR/$SCRIPT_NAME"
+    # Check if running as root
+    check_root
     
-    # Remove configuration
+    # Remove management script
+    rm -f "$INSTALL_DIR/dcm"
+    
+    # Remove configuration directory
     rm -rf "$CONFIG_DIR"
     
-    echo -e "${GREEN}Uninstallation complete!${NC}"
-    echo "Note: Your Docker applications in $DEFAULT_APPS_DIR were not removed."
-    echo "To remove them, delete the directory manually: rm -rf $DEFAULT_APPS_DIR"
+    echo -e "${GREEN}Docker Compose Manager uninstalled successfully${NC}"
+    echo -e "${YELLOW}Note: Docker applications in $DEFAULT_APPS_DIR were not removed${NC}"
 }
 
-# Check if script is being piped
-if [ -t 0 ]; then
-    # Interactive mode
-    case "$1" in
-        install)
-            check_prerequisites
-            install
-            ;;
-        uninstall)
-            uninstall
-            ;;
-        -h|--help)
-            show_usage
-            ;;
-        "")
-            # Default to install if no argument is given
-            check_prerequisites
-            install
-            ;;
-        *)
-            echo -e "${RED}Error: Unknown option${NC}"
-            show_usage
-            exit 1
-            ;;
-    esac
-else
-    # Piped mode - always install
-    check_prerequisites
-    install
-fi 
+# Main script logic
+case "$1" in
+    -h|--help)
+        show_usage
+        ;;
+    -u|--uninstall)
+        uninstall
+        ;;
+    *)
+        install
+        ;;
+esac 

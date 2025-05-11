@@ -1,254 +1,235 @@
-# Installation script for Docker Compose Manager (Windows)
+# Docker Compose Manager Installer for Windows
+# A command-line tool for managing Docker Compose applications
 
 # Colors for output
 $Red = [System.ConsoleColor]::Red
 $Green = [System.ConsoleColor]::Green
 $Yellow = [System.ConsoleColor]::Yellow
+$Blue = [System.ConsoleColor]::Blue
 
 # Installation paths
-$DefaultInstallDir = "$env:ProgramFiles\DockerComposeManager"
-$UserInstallDir = "$env:USERPROFILE\AppData\Local\DockerComposeManager"
-$ScriptName = "dcm.ps1"
-$RepoUrl = "https://raw.githubusercontent.com/lpolish/dockercomposemgr/main"
-$TempDir = "$env:TEMP\dockercomposemgr_install"
+$InstallDir = "$env:ProgramFiles\DockerComposeManager"
 $ConfigDir = "$env:USERPROFILE\.config\dockercomposemgr"
 $DefaultAppsDir = "$env:USERPROFILE\dockerapps"
 
 # Function to display usage
 function Show-Usage {
     Write-Host "Docker Compose Manager Installer"
-    Write-Host "Usage: .\install.ps1 [option]"
+    Write-Host "Usage: $($MyInvocation.MyCommand.Name) [options]"
     Write-Host ""
     Write-Host "Options:"
-    Write-Host "  install     Install Docker Compose Manager"
-    Write-Host "  uninstall   Uninstall Docker Compose Manager"
-    Write-Host "  -h, --help  Show this help message"
+    Write-Host "  -h, --help     Show this help message"
+    Write-Host "  -u, --uninstall Remove Docker Compose Manager"
 }
 
-# Function to check prerequisites
-function Test-Prerequisites {
-    # Check if running as administrator
-    $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-    if (-not $isAdmin) {
-        Write-Host "Warning: Not running as administrator. Some features may be limited." -ForegroundColor $Yellow
-    }
-
-    # Check if Docker is installed
-    if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
-        Write-Host "Error: Docker is not installed" -ForegroundColor $Red
-        exit 1
-    }
-
-    # Check if Docker Compose is installed
-    if (-not (Get-Command docker-compose -ErrorAction SilentlyContinue)) {
-        Write-Host "Error: Docker Compose is not installed" -ForegroundColor $Red
-        exit 1
-    }
-
-    # Check if PowerShell version is sufficient
-    if ($PSVersionTable.PSVersion.Major -lt 5) {
-        Write-Host "Error: PowerShell 5.0 or higher is required" -ForegroundColor $Red
-        exit 1
-    }
+# Function to check if running as administrator
+function Test-Administrator {
+    $currentUser = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+    return $currentUser.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
-# Function to download file
-function Get-File {
-    param (
-        [string]$Url,
-        [string]$Output
-    )
-    try {
-        Invoke-WebRequest -Uri $Url -OutFile $Output -UseBasicParsing
-        return $true
+# Function to install dependencies
+function Install-Dependencies {
+    Write-Host "Installing dependencies..." -ForegroundColor $Blue
+    
+    # Check if winget is available
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+        Write-Host "Error: winget is not installed. Please install the App Installer from the Microsoft Store." -ForegroundColor $Red
+        exit 1
     }
-    catch {
-        Write-Host "Error: Failed to download $Url" -ForegroundColor $Red
-        return $false
+    
+    # Install jq if not present
+    if (-not (Get-Command jq -ErrorAction SilentlyContinue)) {
+        Write-Host "Installing jq..." -ForegroundColor $Blue
+        winget install -e --id stedolan.jq
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
     }
+    
+    # Check if Docker Desktop is installed
+    if (-not (Test-Path "C:\Program Files\Docker\Docker\Docker Desktop.exe")) {
+        Write-Host "Docker Desktop is not installed. Please install it from:" -ForegroundColor $Yellow
+        Write-Host "https://www.docker.com/products/docker-desktop"
+        Write-Host "After installation, please restart your computer and run this installer again."
+        exit 1
+    }
+    
+    # Check if Docker service is running
+    $dockerService = Get-Service -Name "com.docker.service" -ErrorAction SilentlyContinue
+    if (-not $dockerService -or $dockerService.Status -ne "Running") {
+        Write-Host "Docker service is not running. Please start Docker Desktop and try again." -ForegroundColor $Red
+        exit 1
+    }
+    
+    Write-Host "Dependencies installed successfully" -ForegroundColor $Green
 }
 
 # Function to create default configuration
-function New-DefaultConfig {
+function Create-DefaultConfig {
+    Write-Host "Creating default configuration..." -ForegroundColor $Blue
+    
     # Create config directory
-    New-Item -ItemType Directory -Force -Path "$ConfigDir\logs" | Out-Null
+    New-Item -ItemType Directory -Force -Path $ConfigDir | Out-Null
     
-    # Create default config if it doesn't exist
-    $configFile = "$ConfigDir\config.json"
-    if (-not (Test-Path $configFile)) {
+    # Create config.json if it doesn't exist
+    if (-not (Test-Path "$ConfigDir\config.json")) {
         @{
-            version = "1.0.0"
-            apps_directory = $DefaultAppsDir.Replace("\", "/")
+            apps_directory = $DefaultAppsDir
             log_level = "info"
-            log_retention_days = 30
-            default_timeout = 300
-            notifications = @{
-                enabled = $true
-                on_start = $true
-                on_stop = $true
-                on_error = $true
-            }
+            log_retention_days = 7
             backup = @{
-                enabled = $true
-                directory = "$DefaultAppsDir\backups".Replace("\", "/")
-                retention_days = 7
                 include_volumes = $true
+                retention_days = 30
             }
-            update = @{
-                check_interval_hours = 24
-                auto_update = $false
-            }
-        } | ConvertTo-Json -Depth 10 | Set-Content $configFile
+        } | ConvertTo-Json | Set-Content "$ConfigDir\config.json"
     }
     
-    # Create apps registry if it doesn't exist
-    $appsFile = "$ConfigDir\apps.json"
-    if (-not (Test-Path $appsFile)) {
+    # Create apps.json if it doesn't exist
+    if (-not (Test-Path "$ConfigDir\apps.json")) {
         @{
-            version = "1.0.0"
             apps = @{}
-            last_updated = $null
-        } | ConvertTo-Json -Depth 10 | Set-Content $appsFile
+        } | ConvertTo-Json | Set-Content "$ConfigDir\apps.json"
     }
+    
+    Write-Host "Default configuration created successfully" -ForegroundColor $Green
 }
 
 # Function to create apps directory structure
-function New-AppsDirectory {
+function Create-AppsDirectory {
+    Write-Host "Creating apps directory structure..." -ForegroundColor $Blue
+    
     # Create apps directory
     New-Item -ItemType Directory -Force -Path "$DefaultAppsDir\backups" | Out-Null
     
     # Create README if it doesn't exist
-    $readmeFile = "$DefaultAppsDir\README.md"
-    if (-not (Test-Path $readmeFile)) {
+    if (-not (Test-Path "$DefaultAppsDir\README.md")) {
         @"
-# Docker Apps Directory
+# Docker Applications Directory
 
-This directory is where you'll store your Docker Compose applications. Each application should be in its own subdirectory.
+This directory contains your Docker Compose applications managed by Docker Compose Manager.
 
 ## Directory Structure
 
+Each application should be in its own subdirectory with the following structure:
+
 \`\`\`
-$DefaultAppsDir/
-├── app1/                  # Application directory
-│   ├── docker-compose.yml # Docker Compose configuration
-│   ├── .env              # Environment variables (optional)
-│   ├── data/             # Persistent data (if needed)
-│   └── README.md         # Application documentation
-├── app2/
-│   └── ...
-└── backups/              # Backup directory (managed by dcm)
+app_name/
+├── docker-compose.yml    # Docker Compose configuration
+├── .env                  # Environment variables (optional)
+└── data/                # Application data (optional)
 \`\`\`
 
-For more information, run: dcm --help
-"@ | Set-Content $readmeFile
+## Best Practices
+
+1. Keep each application in its own directory
+2. Use descriptive names for applications
+3. Include a README.md in each application directory
+4. Store sensitive data in .env files
+5. Use named volumes for persistent data
+
+## Managing Applications
+
+Use the \`dcm\` command to manage your applications:
+
+\`\`\`powershell
+# List all applications
+dcm list
+
+# Start an application
+dcm start app_name
+
+# Stop an application
+dcm stop app_name
+
+# View application logs
+dcm logs app_name
+
+# Add a new application
+dcm add app_name C:\path\to\docker-compose.yml
+
+# Remove an application
+dcm remove app_name
+\`\`\`
+"@ | Set-Content "$DefaultAppsDir\README.md"
     }
+    
+    Write-Host "Apps directory structure created successfully" -ForegroundColor $Green
 }
 
-# Function to install
+# Function to install Docker Compose Manager
 function Install-DockerComposeManager {
-    Write-Host "Installing Docker Compose Manager..." -ForegroundColor $Yellow
+    Write-Host "Installing Docker Compose Manager..." -ForegroundColor $Blue
     
-    # Create temporary directory
-    Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue
-    New-Item -ItemType Directory -Force -Path $TempDir | Out-Null
-    
-    # Download required files
-    Write-Host "Downloading required files..."
-    if (-not (Get-File -Url "$RepoUrl/manage.ps1" -Output "$TempDir\manage.ps1")) {
-        Remove-Item -Path $TempDir -Recurse -Force
+    # Check if running as administrator
+    if (-not (Test-Administrator)) {
+        Write-Host "Error: This script needs to be run as administrator" -ForegroundColor $Red
+        Write-Host "Please run PowerShell as administrator and try again"
         exit 1
     }
     
-    # Determine install location
-    $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-    if ($isAdmin) {
-        $InstallDir = $DefaultInstallDir
-    } else {
-        $InstallDir = $UserInstallDir
-    }
+    # Install dependencies
+    Install-Dependencies
     
-    # Install the script
-    Write-Host "Installing files to $InstallDir..."
+    # Create installation directory
     New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
-    Copy-Item "$TempDir\manage.ps1" "$InstallDir\$ScriptName" -Force
     
-    # Create configuration and apps directory structure
-    New-DefaultConfig
-    New-AppsDirectory
+    # Download management script
+    Write-Host "Downloading management script..." -ForegroundColor $Blue
+    Invoke-WebRequest -Uri "https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/manage.ps1" -OutFile "$InstallDir\dcm.ps1"
     
     # Create PowerShell profile if it doesn't exist
-    $profilePath = $PROFILE
-    if (-not (Test-Path $profilePath)) {
-        New-Item -ItemType File -Force -Path $profilePath | Out-Null
+    if (-not (Test-Path $PROFILE)) {
+        New-Item -ItemType File -Force -Path $PROFILE | Out-Null
     }
     
-    # Add to PATH if not already there
-    $pathEntry = "$InstallDir"
-    $currentPath = [Environment]::GetEnvironmentVariable("PATH", "User")
-    if ($currentPath -notlike "*$pathEntry*") {
-        [Environment]::SetEnvironmentVariable("PATH", "$currentPath;$pathEntry", "User")
-        $env:PATH = "$env:PATH;$pathEntry"
+    # Add alias to PowerShell profile
+    $aliasLine = "Set-Alias -Name dcm -Value '$InstallDir\dcm.ps1'"
+    if (-not (Select-String -Path $PROFILE -Pattern $aliasLine -Quiet)) {
+        Add-Content -Path $PROFILE -Value "`n$aliasLine"
     }
     
-    # Cleanup
-    Remove-Item -Path $TempDir -Recurse -Force
+    # Create default configuration
+    Create-DefaultConfig
     
-    Write-Host "Installation complete!" -ForegroundColor $Green
-    Write-Host "You can now use the 'dcm' command to manage your Docker Compose applications."
-    Write-Host "Run 'dcm --help' to see available commands."
+    # Create apps directory structure
+    Create-AppsDirectory
     
-    # Check if user bin is in PATH
-    if ($InstallDir -eq $UserInstallDir) {
-        Write-Host "Warning: You may need to restart your PowerShell session for the changes to take effect." -ForegroundColor $Yellow
-    }
+    Write-Host "Docker Compose Manager installed successfully" -ForegroundColor $Green
+    Write-Host "Please restart your PowerShell session to use the 'dcm' command" -ForegroundColor $Yellow
 }
 
-# Function to uninstall
+# Function to uninstall Docker Compose Manager
 function Uninstall-DockerComposeManager {
-    Write-Host "Uninstalling Docker Compose Manager..." -ForegroundColor $Yellow
+    Write-Host "Uninstalling Docker Compose Manager..." -ForegroundColor $Blue
     
-    # Remove binary from both locations
-    Remove-Item -Path "$DefaultInstallDir\$ScriptName" -Force -ErrorAction SilentlyContinue
-    Remove-Item -Path "$UserInstallDir\$ScriptName" -Force -ErrorAction SilentlyContinue
+    # Check if running as administrator
+    if (-not (Test-Administrator)) {
+        Write-Host "Error: This script needs to be run as administrator" -ForegroundColor $Red
+        Write-Host "Please run PowerShell as administrator and try again"
+        exit 1
+    }
     
-    # Remove configuration
+    # Remove installation directory
+    Remove-Item -Path $InstallDir -Recurse -Force -ErrorAction SilentlyContinue
+    
+    # Remove alias from PowerShell profile
+    if (Test-Path $PROFILE) {
+        $profileContent = Get-Content $PROFILE
+        $newContent = $profileContent | Where-Object { $_ -notmatch "Set-Alias -Name dcm -Value" }
+        Set-Content -Path $PROFILE -Value $newContent
+    }
+    
+    # Remove configuration directory
     Remove-Item -Path $ConfigDir -Recurse -Force -ErrorAction SilentlyContinue
     
-    Write-Host "Uninstallation complete!" -ForegroundColor $Green
-    Write-Host "Note: Your Docker applications in $DefaultAppsDir were not removed."
-    Write-Host "To remove them, delete the directory manually: Remove-Item -Path $DefaultAppsDir -Recurse -Force"
+    Write-Host "Docker Compose Manager uninstalled successfully" -ForegroundColor $Green
+    Write-Host "Note: Docker applications in $DefaultAppsDir were not removed" -ForegroundColor $Yellow
 }
 
-# Main script
-$ErrorActionPreference = "Stop"
-
-# Check if script is being piped
-if ($MyInvocation.Line -match "|") {
-    # Piped mode - always install
-    Test-Prerequisites
-    Install-DockerComposeManager
-} else {
-    # Interactive mode
-    switch ($args[0]) {
-        "install" {
-            Test-Prerequisites
-            Install-DockerComposeManager
-        }
-        "uninstall" {
-            Uninstall-DockerComposeManager
-        }
-        { $_ -in "-h", "--help" } {
-            Show-Usage
-        }
-        "" {
-            # Default to install if no argument is given
-            Test-Prerequisites
-            Install-DockerComposeManager
-        }
-        default {
-            Write-Host "Error: Unknown option" -ForegroundColor $Red
-            Show-Usage
-            exit 1
-        }
-    }
+# Main script logic
+switch ($args[0]) {
+    "-h" { Show-Usage }
+    "--help" { Show-Usage }
+    "-u" { Uninstall-DockerComposeManager }
+    "--uninstall" { Uninstall-DockerComposeManager }
+    default { Install-DockerComposeManager }
 } 
