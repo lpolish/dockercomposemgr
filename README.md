@@ -124,6 +124,7 @@ dcm [command] [options]
 - `add <name> <path>` - Add new application to manage
 - `remove <app>` - Remove application from management
 - `update [app]` - Update all or specific application
+- `create` - Create a new application using templates
 
 ### Examples
 
@@ -132,22 +133,34 @@ dcm [command] [options]
    dcm list
    ```
 
-2. Add a new application:
+2. Create a new application using templates:
+   ```bash
+   dcm create
+   ```
+   This will start an interactive wizard that:
+   - Checks for Git installation
+   - Shows available templates (Node.js, FastAPI, Next.js)
+   - Downloads the selected template
+   - Creates a new application directory
+   - Initializes a Git repository
+   - Updates configuration files with your application details
+
+3. Add a new application:
    ```bash
    dcm add myapp /path/to/docker-compose.yml
    ```
 
-3. Start a specific application:
+4. Start a specific application:
    ```bash
    dcm start myapp
    ```
 
-4. View logs for an application:
+5. View logs for an application:
    ```bash
    dcm logs myapp
    ```
 
-5. Update all applications:
+6. Update all applications:
    ```bash
    dcm update
    ```
