@@ -1,6 +1,6 @@
 # Docker Compose Manager
 
-A command-line tool for managing Docker Compose applications on Ubuntu 24.04.
+A command-line tool for managing Docker Compose applications on Linux and Windows.
 
 ## Features
 
@@ -11,16 +11,25 @@ A command-line tool for managing Docker Compose applications on Ubuntu 24.04.
 - Add and remove applications from management
 - Update applications with latest images
 - Simple and intuitive command-line interface
+- Cross-platform support (Linux and Windows)
 
 ## Prerequisites
 
-- Ubuntu 24.04
+### Linux
 - Docker installed
 - Docker Compose installed
 - Git installed
+- Bash shell
+
+### Windows
+- Windows 10/11
+- Docker Desktop for Windows installed
+- Git for Windows installed
+- PowerShell 5.1 or later
 
 ## Quick Install
 
+### Linux
 You can install the tool with a single command:
 
 ```bash
@@ -35,8 +44,26 @@ chmod +x install.sh
 ./install.sh
 ```
 
+### Windows
+You can install the tool using PowerShell:
+
+```powershell
+# Run in PowerShell as Administrator
+Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/install.ps1'))
+```
+
+Or if you prefer to download and run the script manually:
+
+```powershell
+# Run in PowerShell as Administrator
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/install.ps1" -OutFile "install.ps1"
+Set-ExecutionPolicy Bypass -Scope Process -Force
+.\install.ps1
+```
+
 ## Manual Installation
 
+### Linux
 1. Clone the repository:
    ```bash
    git clone https://github.com/lpolish/dockercomposemgr.git
@@ -51,6 +78,30 @@ chmod +x install.sh
 3. Create a symbolic link to make it available system-wide:
    ```bash
    sudo ln -s "$(pwd)/manage.sh" /usr/local/bin/dcm
+   ```
+
+### Windows
+1. Clone the repository:
+   ```powershell
+   git clone https://github.com/lpolish/dockercomposemgr.git
+   cd dockercomposemgr
+   ```
+
+2. Create a PowerShell profile if it doesn't exist:
+   ```powershell
+   if (!(Test-Path -Path $PROFILE)) {
+       New-Item -ItemType File -Path $PROFILE -Force
+   }
+   ```
+
+3. Add the script to your PowerShell profile:
+   ```powershell
+   Add-Content -Path $PROFILE -Value "`$env:Path += `";$(pwd)`""
+   ```
+
+4. Copy the script to a permanent location:
+   ```powershell
+   Copy-Item "manage.ps1" "$env:USERPROFILE\AppData\Local\DockerComposeManager\dcm.ps1"
    ```
 
 ## Usage
@@ -103,6 +154,7 @@ dcm [command] [options]
 
 ## Uninstallation
 
+### Linux
 To uninstall the tool, run:
 
 ```bash
@@ -113,6 +165,20 @@ Or if you installed manually:
 
 ```bash
 sudo rm /usr/local/bin/dcm
+```
+
+### Windows
+To uninstall the tool, run:
+
+```powershell
+# Run in PowerShell as Administrator
+Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/install.ps1')) -ArgumentList "uninstall"
+```
+
+Or if you installed manually:
+
+```powershell
+Remove-Item -Path "$env:USERPROFILE\AppData\Local\DockerComposeManager" -Recurse -Force
 ```
 
 ## License
