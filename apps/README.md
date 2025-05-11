@@ -60,11 +60,29 @@ services:
 NGINX_HOST=example.com
 ```
 
+## Available Commands
+
+* `list` - List all managed applications
+* `status [app]` - Show status of all or specific application
+* `info [app]` - Show detailed information about application
+* `start [app]` - Start all or specific application
+* `stop [app]` - Stop all or specific application
+* `restart [app]` - Restart all or specific application
+* `logs [app]` - Show logs for all or specific application
+* `add <name> <path>` - Add new application to manage
+* `clone <repo_url> <app_name>` - Clone a repository and add it as a managed application
+* `remove <app>` - Remove application from management
+* `update [app]` - Update all or specific application
+* `create` - Create a new application using templates
+
 ## Managing Applications
 
 Use the `dcm` command to manage your applications:
 
 ```bash
+# List all applications
+dcm list
+
 # Add a new application
 dcm add myapp /path/to/docker-compose.yml
 
@@ -74,11 +92,32 @@ dcm clone https://github.com/username/repo.git myapp
 # Start an application
 dcm start myapp
 
+# Stop an application
+dcm stop myapp
+
+# Restart an application
+dcm restart myapp
+
 # View application status
 dcm status myapp
 
 # View application logs
 dcm logs myapp
+
+# Update an application
+dcm update myapp
+
+# Remove an application
+dcm remove myapp
+
+# Backup an application
+dcm backup myapp
+
+# Restore an application from backup
+dcm restore myapp backup_file
+
+# Create a new application from template
+dcm create
 ```
 
 ### Cloning Applications

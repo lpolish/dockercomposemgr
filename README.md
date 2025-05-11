@@ -122,6 +122,7 @@ dcm [command] [options]
 - `restart [app]` - Restart all or specific application
 - `logs [app]` - Show logs for all or specific application
 - `add <name> <path>` - Add new application to manage
+- `clone <repo_url> <app_name>` - Clone a repository and add it as a managed application
 - `remove <app>` - Remove application from management
 - `update [app]` - Update all or specific application
 - `create` - Create a new application using templates
@@ -150,17 +151,22 @@ dcm [command] [options]
    dcm add myapp /path/to/docker-compose.yml
    ```
 
-4. Start a specific application:
+4. Clone and add a repository as an application:
+   ```bash
+   dcm clone https://github.com/username/repo.git myapp
+   ```
+
+5. Start a specific application:
    ```bash
    dcm start myapp
    ```
 
-5. View logs for an application:
+6. View logs for an application:
    ```bash
    dcm logs myapp
    ```
 
-6. Update all applications:
+7. Update all applications:
    ```bash
    dcm update
    ```
