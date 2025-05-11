@@ -17,13 +17,29 @@ A command-line tool for managing Docker Compose applications on Ubuntu servers. 
 - Ubuntu 24.04 or later
 - Docker installed
 - Docker Compose installed
+- Git installed
 
 ## Installation
 
+### Quick Install
+
+```bash
+# Download the installation script
+curl -O https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/install.sh
+
+# Make it executable
+chmod +x install.sh
+
+# Run the installer (requires sudo)
+sudo ./install.sh install
+```
+
+### Manual Installation
+
 1. Clone this repository:
 ```bash
-git clone <repository-url>
-cd managelinux2
+git clone https://github.com/lpolish/dockercomposemgr.git
+cd dockercomposemgr
 ```
 
 2. Make the script executable:
@@ -31,9 +47,17 @@ cd managelinux2
 chmod +x manage.sh
 ```
 
-3. (Optional) Create a symbolic link to make the command available system-wide:
+3. Create a symbolic link to make the command available system-wide:
 ```bash
 sudo ln -s "$(pwd)/manage.sh" /usr/local/bin/dcm
+```
+
+### Uninstallation
+
+To uninstall the tool:
+
+```bash
+sudo ./install.sh uninstall
 ```
 
 ## Usage
@@ -42,9 +66,9 @@ The tool provides the following commands:
 
 ### Main Menu
 ```bash
-$ ./manage.sh --help
+$ dcm --help
 Docker Compose Manager
-Usage: ./manage.sh [command] [options]
+Usage: dcm [command] [options]
 
 Commands:
   list                    List all managed applications
@@ -64,7 +88,7 @@ Options:
 
 ### List Applications
 ```bash
-$ ./manage.sh list
+$ dcm list
 Managed Applications:
 -------------------
 - wordpress
@@ -74,7 +98,7 @@ Managed Applications:
 
 ### Show Application Status
 ```bash
-$ ./manage.sh status wordpress
+$ dcm status wordpress
 Checking wordpress...
 Name                Command               State           Ports
 ------------------------------------------------------------------
@@ -84,7 +108,7 @@ wordpress_web_1     docker-entrypoint.sh  Up      0.0.0.0:8080->80/tcp
 
 ### Show Detailed Application Information
 ```bash
-$ ./manage.sh info wordpress
+$ dcm info wordpress
 === Detailed Information for wordpress ===
 
 Container Status:
@@ -138,7 +162,7 @@ Health: healthy
 
 ### Start Applications
 ```bash
-$ ./manage.sh start wordpress
+$ dcm start wordpress
 Starting wordpress...
 Creating network "wordpress_default"
 Creating wordpress_db_1 ... done
@@ -147,7 +171,7 @@ Creating wordpress_web_1 ... done
 
 ### Stop Applications
 ```bash
-$ ./manage.sh stop wordpress
+$ dcm stop wordpress
 Stopping wordpress...
 Stopping wordpress_web_1 ... done
 Stopping wordpress_db_1 ... done
@@ -158,7 +182,7 @@ Removing network wordpress_default
 
 ### Restart Applications
 ```bash
-$ ./manage.sh restart wordpress
+$ dcm restart wordpress
 Restarting wordpress...
 Restarting wordpress_db_1 ... done
 Restarting wordpress_web_1 ... done
@@ -166,7 +190,7 @@ Restarting wordpress_web_1 ... done
 
 ### View Logs
 ```bash
-$ ./manage.sh logs wordpress
+$ dcm logs wordpress
 Logs for wordpress:
 wordpress_db_1  | 2024-03-14 10:15:23.123 UTC [1] LOG:  database system is ready to accept connections
 wordpress_web_1 | 2024-03-14 10:15:24.456 UTC [1] INFO: Starting Apache web server
@@ -174,19 +198,19 @@ wordpress_web_1 | 2024-03-14 10:15:24.456 UTC [1] INFO: Starting Apache web serv
 
 ### Add New Application
 ```bash
-$ ./manage.sh add myapp /path/to/app
+$ dcm add myapp /path/to/app
 Application 'myapp' added successfully
 ```
 
 ### Remove Application
 ```bash
-$ ./manage.sh remove myapp
+$ dcm remove myapp
 Application 'myapp' removed successfully
 ```
 
 ### Update Applications
 ```bash
-$ ./manage.sh update wordpress
+$ dcm update wordpress
 Updating wordpress...
 Pulling wordpress:latest ... done
 Pulling mysql:5.7 ... done
@@ -199,6 +223,7 @@ Recreating wordpress_db_1 ... done
 ```
 .
 ├── manage.sh          # Main management script
+├── install.sh         # Installation script
 ├── config/           # Configuration directory
 ├── apps/            # Managed applications directory
 │   ├── wordpress/   # Application directory
@@ -230,7 +255,7 @@ services:
 
 2. Run the add command:
 ```bash
-./manage.sh add myapp /path/to/app
+dcm add myapp /path/to/app
 ```
 
 The tool will copy the `docker-compose.yml` file to the apps directory and manage it from there.
@@ -251,15 +276,15 @@ The tool will copy the `docker-compose.yml` file to the apps directory and manag
 The tool provides clear error messages for common issues:
 
 ```bash
-$ ./manage.sh start nonexistent
+$ dcm start nonexistent
 Error: Application 'nonexistent' not found
 
-$ ./manage.sh add myapp /invalid/path
+$ dcm add myapp /invalid/path
 Error: docker-compose.yml not found in specified path
 
-$ ./manage.sh add
+$ dcm add
 Error: Application name and path required
-Usage: ./manage.sh add <name> <path>
+Usage: dcm add <name> <path>
 ```
 
 ## Contributing
