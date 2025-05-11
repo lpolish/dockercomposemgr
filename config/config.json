@@ -1,0 +1,23 @@
+{
+    "version": "1.0.0",
+    "apps_directory": "~/dockerapps",
+    "log_level": "info",
+    "log_retention_days": 30,
+    "default_timeout": 300,
+    "notifications": {
+        "enabled": true,
+        "on_start": true,
+        "on_stop": true,
+        "on_error": true
+    },
+    "backup": {
+        "enabled": true,
+        "directory": "~/dockerapps/backups",
+        "retention_days": 7,
+        "include_volumes": true
+    },
+    "update": {
+        "check_interval_hours": 24,
+        "auto_update": false
+    }
+} 

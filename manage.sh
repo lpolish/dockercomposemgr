@@ -1,12 +1,13 @@
 #!/bin/bash
 
-# Docker Compose Manager for Ubuntu
+# Docker Compose Manager for Linux
 # A command-line tool for managing Docker Compose applications
 
-# Configuration
-CONFIG_DIR="./config"
-APPS_DIR="./apps"
-LOG_DIR="./logs"
+# Load configuration
+CONFIG_DIR="$HOME/.config/dockercomposemgr"
+CONFIG_FILE="$CONFIG_DIR/config.json"
+APPS_FILE="$CONFIG_DIR/apps.json"
+DEFAULT_APPS_DIR="$HOME/dockerapps"
 
 # Colors for output
 RED='\033[0;31m'
@@ -15,13 +16,32 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Ensure required directories exist
-mkdir -p "$CONFIG_DIR" "$APPS_DIR" "$LOG_DIR"
+# Function to load configuration
+load_config() {
+    if [ ! -f "$CONFIG_FILE" ]; then
+        echo -e "${RED}Error: Configuration file not found${NC}"
+        echo "Please run the installer first:"
+        echo "curl -fsSL https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/install.sh | bash"
+        exit 1
+    fi
+    
+    # Load apps directory from config
+    APPS_DIR=$(jq -r '.apps_directory' "$CONFIG_FILE")
+    if [ "$APPS_DIR" = "null" ] || [ -z "$APPS_DIR" ]; then
+        APPS_DIR="$DEFAULT_APPS_DIR"
+    fi
+    
+    # Expand ~ to home directory
+    APPS_DIR="${APPS_DIR/#\~/$HOME}"
+    
+    # Create apps directory if it doesn't exist
+    mkdir -p "$APPS_DIR/backups"
+}
 
 # Function to display usage
 show_usage() {
     echo "Docker Compose Manager"
-    echo "Usage: $0 [command] [options]"
+    echo "Usage: dcm [command] [options]"
     echo ""
     echo "Commands:"
     echo "  list                    List all managed applications"
@@ -34,6 +54,8 @@ show_usage() {
     echo "  add <name> <path>      Add new application to manage"
     echo "  remove <app>           Remove application from management"
     echo "  update [app]           Update all or specific application"
+    echo "  backup [app]           Backup application data and volumes"
+    echo "  restore <app> <backup> Restore application from backup"
     echo ""
     echo "Options:"
     echo "  -h, --help             Show this help message"
@@ -49,6 +71,10 @@ check_docker() {
         echo -e "${RED}Error: Docker Compose is not installed${NC}"
         exit 1
     fi
+    if ! command -v jq &> /dev/null; then
+        echo -e "${RED}Error: jq is not installed${NC}"
+        exit 1
+    fi
 }
 
 # Function to list all managed applications
@@ -61,7 +87,7 @@ list_apps() {
     echo "Managed Applications:"
     echo "-------------------"
     for app in "$APPS_DIR"/*; do
-        if [ -d "$app" ]; then
+        if [ -d "$app" ] && [ -f "$app/docker-compose.yml" ]; then
             app_name=$(basename "$app")
             echo "- $app_name"
         fi
@@ -73,14 +99,14 @@ get_status() {
     local app=$1
     if [ -z "$app" ]; then
         for app_dir in "$APPS_DIR"/*; do
-            if [ -d "$app_dir" ]; then
+            if [ -d "$app_dir" ] && [ -f "$app_dir/docker-compose.yml" ]; then
                 app_name=$(basename "$app_dir")
                 echo "Checking $app_name..."
                 docker compose -f "$app_dir/docker-compose.yml" ps
             fi
         done
     else
-        if [ -d "$APPS_DIR/$app" ]; then
+        if [ -d "$APPS_DIR/$app" ] && [ -f "$APPS_DIR/$app/docker-compose.yml" ]; then
             docker compose -f "$APPS_DIR/$app/docker-compose.yml" ps
         else
             echo -e "${RED}Error: Application '$app' not found${NC}"
@@ -94,11 +120,11 @@ get_app_info() {
     local app=$1
     if [ -z "$app" ]; then
         echo -e "${RED}Error: Application name required${NC}"
-        echo "Usage: $0 info <app>"
+        echo "Usage: dcm info <app>"
         exit 1
     fi
 
-    if [ ! -d "$APPS_DIR/$app" ]; then
+    if [ ! -d "$APPS_DIR/$app" ] || [ ! -f "$APPS_DIR/$app/docker-compose.yml" ]; then
         echo -e "${RED}Error: Application '$app' not found${NC}"
         exit 1
     fi
@@ -151,8 +177,108 @@ get_app_info() {
     done
 }
 
+# Function to backup application
+backup_app() {
+    local app=$1
+    local backup_dir="$APPS_DIR/backups"
+    local timestamp=$(date +%Y%m%d_%H%M%S)
+    
+    if [ -z "$app" ]; then
+        echo -e "${RED}Error: Application name required${NC}"
+        echo "Usage: dcm backup <app>"
+        exit 1
+    fi
+
+    if [ ! -d "$APPS_DIR/$app" ] || [ ! -f "$APPS_DIR/$app/docker-compose.yml" ]; then
+        echo -e "${RED}Error: Application '$app' not found${NC}"
+        exit 1
+    fi
+
+    echo "Creating backup for $app..."
+    
+    # Create backup directory
+    mkdir -p "$backup_dir/$app"
+    
+    # Backup docker-compose.yml and .env
+    cp "$APPS_DIR/$app/docker-compose.yml" "$backup_dir/$app/docker-compose.yml"
+    if [ -f "$APPS_DIR/$app/.env" ]; then
+        cp "$APPS_DIR/$app/.env" "$backup_dir/$app/.env"
+    fi
+    
+    # Backup volumes if enabled
+    if [ "$(jq -r '.backup.include_volumes' "$CONFIG_FILE")" = "true" ]; then
+        for volume in $(docker compose -f "$APPS_DIR/$app/docker-compose.yml" config --format json | jq -r '.volumes | keys[]'); do
+            echo "Backing up volume: $volume"
+            docker run --rm -v "$volume:/source" -v "$backup_dir/$app:/backup" alpine tar czf "/backup/${volume}.tar.gz" -C /source .
+        done
+    fi
+    
+    # Create backup archive
+    cd "$backup_dir/$app"
+    tar czf "../${app}_${timestamp}.tar.gz" .
+    cd - > /dev/null
+    
+    # Cleanup temporary files
+    rm -rf "$backup_dir/$app"
+    
+    echo -e "${GREEN}Backup created: ${app}_${timestamp}.tar.gz${NC}"
+}
+
+# Function to restore application
+restore_app() {
+    local app=$1
+    local backup=$2
+    local backup_dir="$APPS_DIR/backups"
+    
+    if [ -z "$app" ] || [ -z "$backup" ]; then
+        echo -e "${RED}Error: Application name and backup file required${NC}"
+        echo "Usage: dcm restore <app> <backup>"
+        exit 1
+    fi
+
+    if [ ! -f "$backup_dir/$backup" ]; then
+        echo -e "${RED}Error: Backup file '$backup' not found${NC}"
+        exit 1
+    fi
+
+    echo "Restoring $app from backup..."
+    
+    # Create temporary directory
+    local temp_dir=$(mktemp -d)
+    
+    # Extract backup
+    tar xzf "$backup_dir/$backup" -C "$temp_dir"
+    
+    # Create application directory
+    mkdir -p "$APPS_DIR/$app"
+    
+    # Restore docker-compose.yml and .env
+    cp "$temp_dir/docker-compose.yml" "$APPS_DIR/$app/"
+    if [ -f "$temp_dir/.env" ]; then
+        cp "$temp_dir/.env" "$APPS_DIR/$app/"
+    fi
+    
+    # Restore volumes if they exist
+    if [ "$(jq -r '.backup.include_volumes' "$CONFIG_FILE")" = "true" ]; then
+        for volume_file in "$temp_dir"/*.tar.gz; do
+            if [ -f "$volume_file" ]; then
+                volume_name=$(basename "$volume_file" .tar.gz)
+                echo "Restoring volume: $volume_name"
+                docker volume create "$volume_name"
+                docker run --rm -v "$volume_name:/target" -v "$temp_dir:/backup" alpine sh -c "cd /target && tar xzf /backup/$(basename "$volume_file")"
+            fi
+        done
+    fi
+    
+    # Cleanup
+    rm -rf "$temp_dir"
+    
+    echo -e "${GREEN}Application restored successfully${NC}"
+}
+
 # Main script logic
 check_docker
+load_config
 
 case "$1" in
     list)
@@ -167,14 +293,14 @@ case "$1" in
     start)
         if [ -z "$2" ]; then
             for app_dir in "$APPS_DIR"/*; do
-                if [ -d "$app_dir" ]; then
+                if [ -d "$app_dir" ] && [ -f "$app_dir/docker-compose.yml" ]; then
                     app_name=$(basename "$app_dir")
                     echo "Starting $app_name..."
                     docker compose -f "$app_dir/docker-compose.yml" up -d
                 fi
             done
         else
-            if [ -d "$APPS_DIR/$2" ]; then
+            if [ -d "$APPS_DIR/$2" ] && [ -f "$APPS_DIR/$2/docker-compose.yml" ]; then
                 docker compose -f "$APPS_DIR/$2/docker-compose.yml" up -d
             else
                 echo -e "${RED}Error: Application '$2' not found${NC}"
@@ -185,14 +311,14 @@ case "$1" in
     stop)
         if [ -z "$2" ]; then
             for app_dir in "$APPS_DIR"/*; do
-                if [ -d "$app_dir" ]; then
+                if [ -d "$app_dir" ] && [ -f "$app_dir/docker-compose.yml" ]; then
                     app_name=$(basename "$app_dir")
                     echo "Stopping $app_name..."
                     docker compose -f "$app_dir/docker-compose.yml" down
                 fi
             done
         else
-            if [ -d "$APPS_DIR/$2" ]; then
+            if [ -d "$APPS_DIR/$2" ] && [ -f "$APPS_DIR/$2/docker-compose.yml" ]; then
                 docker compose -f "$APPS_DIR/$2/docker-compose.yml" down
             else
                 echo -e "${RED}Error: Application '$2' not found${NC}"
@@ -203,14 +329,14 @@ case "$1" in
     restart)
         if [ -z "$2" ]; then
             for app_dir in "$APPS_DIR"/*; do
-                if [ -d "$app_dir" ]; then
+                if [ -d "$app_dir" ] && [ -f "$app_dir/docker-compose.yml" ]; then
                     app_name=$(basename "$app_dir")
                     echo "Restarting $app_name..."
                     docker compose -f "$app_dir/docker-compose.yml" restart
                 fi
             done
         else
-            if [ -d "$APPS_DIR/$2" ]; then
+            if [ -d "$APPS_DIR/$2" ] && [ -f "$APPS_DIR/$2/docker-compose.yml" ]; then
                 docker compose -f "$APPS_DIR/$2/docker-compose.yml" restart
             else
                 echo -e "${RED}Error: Application '$2' not found${NC}"
@@ -221,14 +347,14 @@ case "$1" in
     logs)
         if [ -z "$2" ]; then
             for app_dir in "$APPS_DIR"/*; do
-                if [ -d "$app_dir" ]; then
+                if [ -d "$app_dir" ] && [ -f "$app_dir/docker-compose.yml" ]; then
                     app_name=$(basename "$app_dir")
                     echo "Logs for $app_name:"
                     docker compose -f "$app_dir/docker-compose.yml" logs
                 fi
             done
         else
-            if [ -d "$APPS_DIR/$2" ]; then
+            if [ -d "$APPS_DIR/$2" ] && [ -f "$APPS_DIR/$2/docker-compose.yml" ]; then
                 docker compose -f "$APPS_DIR/$2/docker-compose.yml" logs
             else
                 echo -e "${RED}Error: Application '$2' not found${NC}"
@@ -239,7 +365,7 @@ case "$1" in
     add)
         if [ -z "$2" ] || [ -z "$3" ]; then
             echo -e "${RED}Error: Application name and path required${NC}"
-            echo "Usage: $0 add <name> <path>"
+            echo "Usage: dcm add <name> <path>"
             exit 1
         fi
         if [ ! -f "$3/docker-compose.yml" ]; then
@@ -248,12 +374,15 @@ case "$1" in
         fi
         mkdir -p "$APPS_DIR/$2"
         cp "$3/docker-compose.yml" "$APPS_DIR/$2/"
+        if [ -f "$3/.env" ]; then
+            cp "$3/.env" "$APPS_DIR/$2/"
+        fi
         echo -e "${GREEN}Application '$2' added successfully${NC}"
         ;;
     remove)
         if [ -z "$2" ]; then
             echo -e "${RED}Error: Application name required${NC}"
-            echo "Usage: $0 remove <app>"
+            echo "Usage: dcm remove <app>"
             exit 1
         fi
         if [ -d "$APPS_DIR/$2" ]; then
@@ -267,7 +396,7 @@ case "$1" in
     update)
         if [ -z "$2" ]; then
             for app_dir in "$APPS_DIR"/*; do
-                if [ -d "$app_dir" ]; then
+                if [ -d "$app_dir" ] && [ -f "$app_dir/docker-compose.yml" ]; then
                     app_name=$(basename "$app_dir")
                     echo "Updating $app_name..."
                     docker compose -f "$app_dir/docker-compose.yml" pull
@@ -275,7 +404,7 @@ case "$1" in
                 fi
             done
         else
-            if [ -d "$APPS_DIR/$2" ]; then
+            if [ -d "$APPS_DIR/$2" ] && [ -f "$APPS_DIR/$2/docker-compose.yml" ]; then
                 docker compose -f "$APPS_DIR/$2/docker-compose.yml" pull
                 docker compose -f "$APPS_DIR/$2/docker-compose.yml" up -d
             else
@@ -283,6 +412,12 @@ case "$1" in
                 exit 1
             fi
         fi
+        ;;
+    backup)
+        backup_app "$2"
+        ;;
+    restore)
+        restore_app "$2" "$3"
         ;;
     -h|--help)
         show_usage
