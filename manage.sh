@@ -511,12 +511,19 @@ create_app() {
 
 # Function to list all applications
 list_apps() {
-    if [ ! -f "$APPS_FILE" ]; then
-        echo -e "${YELLOW}No applications configured yet${NC}"
-        return 0
+    # Ensure config directory exists
+    if [ ! -d "$CONFIG_DIR" ]; then
+        mkdir -p "$CONFIG_DIR"
+        echo "{}" > "$APPS_FILE"
+        chmod 644 "$APPS_FILE"
     fi
 
-    local apps=$(jq -r '.apps | keys[]' "$APPS_FILE")
+    if [ ! -f "$APPS_FILE" ]; then
+        echo "{}" > "$APPS_FILE"
+        chmod 644 "$APPS_FILE"
+    fi
+
+    local apps=$(jq -r '.apps | keys[]' "$APPS_FILE" 2>/dev/null)
     if [ -z "$apps" ]; then
         echo -e "${YELLOW}No applications configured yet${NC}"
         return 0

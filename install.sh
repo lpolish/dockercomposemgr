@@ -180,6 +180,11 @@ EOF
 }
 EOF
     fi
+
+    # Ensure proper permissions
+    chown -R $SUDO_USER:$SUDO_USER "$CONFIG_DIR"
+    chmod 755 "$CONFIG_DIR"
+    chmod 644 "$CONFIG_DIR"/*.json
     
     echo -e "${GREEN}Default configuration created successfully${NC}"
 }
