@@ -46,6 +46,22 @@ detect_distro() {
     fi
 }
 
+# Function to download a file using curl or wget
+download_file() {
+    local url=$1
+    local output=$2
+    
+    if command -v curl &> /dev/null; then
+        curl -fsSL "$url" -o "$output"
+    elif command -v wget &> /dev/null; then
+        wget -q "$url" -O "$output"
+    else
+        echo -e "${RED}Error: Neither curl nor wget is installed${NC}"
+        echo "Please install either curl or wget and try again"
+        exit 1
+    fi
+}
+
 # Function to install Docker
 install_docker() {
     # Check if we're in a container
@@ -68,13 +84,13 @@ install_docker() {
             apt-get install -y \
                 apt-transport-https \
                 ca-certificates \
-                curl \
                 gnupg \
                 lsb-release \
                 jq
             
             # Add Docker's official GPG key
-            curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+            download_file "https://download.docker.com/linux/ubuntu/gpg" "/usr/share/keyrings/docker-archive-keyring.gpg"
+            gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg /usr/share/keyrings/docker-archive-keyring.gpg
             
             # Set up the stable repository
             echo \
@@ -246,7 +262,7 @@ install() {
     
     # Download management script
     echo -e "${BLUE}Downloading management script...${NC}"
-    curl -fsSL https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/manage.sh -o "$INSTALL_DIR/dcm"
+    download_file "https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/manage.sh" "$INSTALL_DIR/dcm"
     chmod +x "$INSTALL_DIR/dcm"
     
     # Create default configuration
