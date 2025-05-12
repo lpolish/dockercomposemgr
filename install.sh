@@ -54,6 +54,14 @@ install_docker() {
     local in_container=false
     if [ -f /.dockerenv ] || [ -f /run/.containerenv ]; then
         in_container=true
+        echo -e "${YELLOW}Detected container environment${NC}"
+        
+        # Check if container is privileged
+        if [ ! -w /dev ]; then
+            echo -e "${RED}Error: Container is not privileged${NC}"
+            echo "Please run the container with --privileged flag"
+            exit 1
+        fi
     fi
     
     case $OS in
@@ -87,6 +95,7 @@ install_docker() {
             
             if [ "$in_container" = true ]; then
                 # In container, start Docker daemon directly
+                echo -e "${YELLOW}Starting Docker daemon in container...${NC}"
                 dockerd > /dev/null 2>&1 &
                 sleep 5  # Give Docker daemon time to start
             else
@@ -112,6 +121,7 @@ install_docker() {
             
             if [ "$in_container" = true ]; then
                 # In container, start Docker daemon directly
+                echo -e "${YELLOW}Starting Docker daemon in container...${NC}"
                 dockerd > /dev/null 2>&1 &
                 sleep 5  # Give Docker daemon time to start
             else
@@ -142,7 +152,11 @@ install_docker() {
     done
     
     echo -e "${RED}Error: Docker installation failed${NC}"
-    echo "Please make sure you're running the container with --privileged flag"
+    if [ "$in_container" = true ]; then
+        echo "Please make sure you're running the container with --privileged flag"
+    else
+        echo "Please check the installation logs for more information"
+    fi
     exit 1
 }
 
