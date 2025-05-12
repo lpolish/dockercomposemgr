@@ -180,16 +180,30 @@ dcm restore myapp backup_file.tar.gz
 ## Quick Install
 
 ### Linux
-You can install the tool with a single command:
+You can install the tool with a single command using either curl or wget:
 
+Using curl:
 ```bash
 curl -fsSL https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/install.sh | bash
 ```
 
+Or using wget:
+```bash
+wget -qO- https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/install.sh | bash
+```
+
 Or if you prefer to download and run the script manually:
 
+Using curl:
 ```bash
 curl -fsSL https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/install.sh -o install.sh
+chmod +x install.sh
+./install.sh
+```
+
+Using wget:
+```bash
+wget https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/install.sh
 chmod +x install.sh
 ./install.sh
 ```
