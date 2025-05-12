@@ -170,6 +170,7 @@ dcm restore myapp backup_file.tar.gz
 - Docker Compose installed
 - Git installed
 - Bash shell
+- jq installed (can be installed with `apt-get install jq` on Ubuntu/Debian)
 - Either curl or wget installed (wget can be installed with `apt-get install wget` on Ubuntu/Debian)
 
 ### Windows

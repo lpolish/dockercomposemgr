@@ -509,6 +509,38 @@ create_app() {
     echo "You can now start developing your application"
 }
 
+# Function to list all applications
+list_apps() {
+    if [ ! -f "$APPS_FILE" ]; then
+        echo -e "${YELLOW}No applications configured yet${NC}"
+        return 0
+    fi
+
+    local apps=$(jq -r '.apps | keys[]' "$APPS_FILE")
+    if [ -z "$apps" ]; then
+        echo -e "${YELLOW}No applications configured yet${NC}"
+        return 0
+    fi
+
+    echo -e "${CYAN}Configured Applications:${NC}"
+    echo "----------------------------------------"
+    for app in $apps; do
+        local path=$(jq -r --arg app "$app" '.apps[$app].path' "$APPS_FILE")
+        echo -e "${GREEN}$app${NC}"
+        echo "  Path: $path"
+        if [ -d "$APPS_DIR/$app" ]; then
+            if [ -f "$APPS_DIR/$app/docker-compose.yml" ]; then
+                echo "  Status: $(docker compose -f "$APPS_DIR/$app/docker-compose.yml" ps --format json 2>/dev/null | jq -r 'if . == [] then "Not running" else "Running" end')"
+            else
+                echo "  Status: Configuration missing"
+            fi
+        else
+            echo "  Status: Directory missing"
+        fi
+        echo "----------------------------------------"
+    done
+}
+
 # Main script logic
 check_docker
 load_config
