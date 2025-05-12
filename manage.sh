@@ -13,11 +13,17 @@ DEFAULT_APPS_DIR="$HOME/dockerapps"
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # Function to check if Docker is installed and running
 check_docker() {
+    # Check if we're in a container
+    if [ -f /.dockerenv ] || [ -f /run/.containerenv ]; then
+        echo -e "${YELLOW}Running in container environment - skipping Docker checks${NC}"
+        return 0
+    fi
+
     if ! command -v docker &> /dev/null; then
         echo -e "${RED}Error: Docker is not installed${NC}"
         echo "Please run the installer first:"
@@ -211,7 +217,7 @@ get_app_info() {
         exit 1
     fi
 
-    echo -e "${BLUE}=== Detailed Information for $app ===${NC}"
+    echo -e "${CYAN}=== Detailed Information for $app ===${NC}"
     echo
 
     # Get container status

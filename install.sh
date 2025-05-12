@@ -7,7 +7,7 @@
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # Installation paths
@@ -70,7 +70,7 @@ install_docker() {
         return 0
     fi
 
-    echo -e "${BLUE}Installing Docker...${NC}"
+    echo -e "${CYAN}Installing Docker...${NC}"
     
     case $OS in
         "Ubuntu"|"Debian GNU/Linux")
@@ -152,7 +152,7 @@ install_docker() {
 
 # Function to create default configuration
 create_default_config() {
-    echo -e "${BLUE}Creating default configuration...${NC}"
+    echo -e "${CYAN}Creating default configuration...${NC}"
     
     # Create config directory
     mkdir -p "$CONFIG_DIR"
@@ -186,7 +186,7 @@ EOF
 
 # Function to create apps directory structure
 create_apps_directory() {
-    echo -e "${BLUE}Creating apps directory structure...${NC}"
+    echo -e "${CYAN}Creating apps directory structure...${NC}"
     
     # Create apps directory
     mkdir -p "$DEFAULT_APPS_DIR/backups"
@@ -248,7 +248,7 @@ EOF
 
 # Function to install Docker Compose Manager
 install() {
-    echo -e "${BLUE}Installing Docker Compose Manager...${NC}"
+    echo -e "${CYAN}Installing Docker Compose Manager...${NC}"
     
     # Check if running as root
     check_root
@@ -257,11 +257,11 @@ install() {
     detect_distro
     
     # Install Docker and dependencies only if not in container
-    echo -e "${BLUE}Installing Docker...${NC}"
+    echo -e "${CYAN}Installing Docker...${NC}"
     install_docker
     
     # Download management script
-    echo -e "${BLUE}Downloading management script...${NC}"
+    echo -e "${CYAN}Downloading management script...${NC}"
     download_file "https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/manage.sh" "$INSTALL_DIR/dcm"
     chmod +x "$INSTALL_DIR/dcm"
     
@@ -277,7 +277,7 @@ install() {
 
 # Function to uninstall Docker Compose Manager
 uninstall() {
-    echo -e "${BLUE}Uninstalling Docker Compose Manager...${NC}"
+    echo -e "${CYAN}Uninstalling Docker Compose Manager...${NC}"
     
     # Check if running as root
     check_root
