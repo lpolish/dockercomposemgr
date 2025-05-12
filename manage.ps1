@@ -31,6 +31,138 @@ function Load-Config {
     
     # Create apps directory if it doesn't exist
     New-Item -ItemType Directory -Force -Path "$script:AppsDir\backups" | Out-Null
+
+    # Load apps configuration
+    if (-not (Test-Path $AppsFile)) {
+        Set-Content -Path $AppsFile -Value "{}"
+    }
+}
+
+# Function to get application path
+function Get-AppPath {
+    param (
+        [string]$AppName
+    )
+    
+    $config = Get-Content $AppsFile | ConvertFrom-Json
+    if ($config.apps.$AppName) {
+        return $config.apps.$AppName.path
+    }
+    return $null
+}
+
+# Function to add application
+function Add-App {
+    param (
+        [string]$AppName,
+        [string]$AppPath
+    )
+    
+    if ([string]::IsNullOrEmpty($AppName) -or [string]::IsNullOrEmpty($AppPath)) {
+        Write-Host "Error: Application name and path required" -ForegroundColor $Red
+        Write-Host "Usage: dcm add <name> <path>"
+        exit 1
+    }
+
+    if (-not (Test-Path "$AppPath\docker-compose.yml")) {
+        Write-Host "Error: docker-compose.yml not found in specified path" -ForegroundColor $Red
+        exit 1
+    }
+
+    # Create application directory
+    New-Item -ItemType Directory -Force -Path "$script:AppsDir\$AppName" | Out-Null
+
+    # Store application path in config
+    $config = Get-Content $AppsFile | ConvertFrom-Json
+    $config.apps | Add-Member -NotePropertyName $AppName -NotePropertyValue @{
+        path = $AppPath
+    }
+    $config | ConvertTo-Json | Set-Content $AppsFile
+
+    # Copy README.md if it exists
+    if (Test-Path "$AppPath\README.md") {
+        Copy-Item "$AppPath\README.md" "$script:AppsDir\$AppName\"
+    }
+
+    Write-Host "Application '$AppName' added successfully" -ForegroundColor $Green
+}
+
+# Function to clone a repository and add it as an application
+function Clone-App {
+    param (
+        [string]$RepoUrl,
+        [string]$AppName
+    )
+    
+    if ([string]::IsNullOrEmpty($RepoUrl) -or [string]::IsNullOrEmpty($AppName)) {
+        Write-Host "Error: Repository URL and application name required" -ForegroundColor $Red
+        Write-Host "Usage: dcm clone <repo_url> <app_name>"
+        exit 1
+    }
+
+    # Create temporary directory
+    $tempDir = Join-Path $env:TEMP ([System.Guid]::NewGuid().ToString())
+    New-Item -ItemType Directory -Force -Path $tempDir | Out-Null
+    
+    Write-Host "Cloning repository..."
+    try {
+        git clone $RepoUrl $tempDir
+    }
+    catch {
+        Write-Host "Error: Failed to clone repository" -ForegroundColor $Red
+        Remove-Item -Path $tempDir -Recurse -Force
+        exit 1
+    }
+
+    # Check if docker-compose.yml exists
+    if (-not (Test-Path "$tempDir\docker-compose.yml")) {
+        Write-Host "Error: Repository does not contain a docker-compose.yml file" -ForegroundColor $Red
+        Remove-Item -Path $tempDir -Recurse -Force
+        exit 1
+    }
+
+    # Create application directory
+    New-Item -ItemType Directory -Force -Path "$script:AppsDir\$AppName" | Out-Null
+
+    # Store application path in config
+    $config = Get-Content $AppsFile | ConvertFrom-Json
+    $config.apps | Add-Member -NotePropertyName $AppName -NotePropertyValue @{
+        path = $tempDir
+    }
+    $config | ConvertTo-Json | Set-Content $AppsFile
+
+    # Copy README.md if it exists
+    if (Test-Path "$tempDir\README.md") {
+        Copy-Item "$tempDir\README.md" "$script:AppsDir\$AppName\"
+    }
+
+    Write-Host "Application '$AppName' cloned and added successfully" -ForegroundColor $Green
+}
+
+# Function to get application status
+function Get-ApplicationStatus {
+    param (
+        [string]$AppName
+    )
+    
+    if (-not $AppName) {
+        $apps = Get-ChildItem -Path $script:AppsDir -Directory
+        foreach ($app in $apps) {
+            $appPath = Get-AppPath $app.Name
+            if ($appPath) {
+                Write-Host "Checking $($app.Name)..."
+                docker compose -f "$appPath\docker-compose.yml" ps
+            }
+        }
+    } else {
+        $appPath = Get-AppPath $AppName
+        if ($appPath) {
+            docker compose -f "$appPath\docker-compose.yml" ps
+        } else {
+            Write-Host "Error: Application '$AppName' not found" -ForegroundColor $Red
+            exit 1
+        }
+    }
 }
 
 # Function to display usage
@@ -241,28 +373,6 @@ function Get-Applications {
     }
 }
 
-# Function to get application status
-function Get-ApplicationStatus {
-    param (
-        [string]$AppName
-    )
-    
-    if (-not $AppName) {
-        $apps = Get-ChildItem -Path $script:AppsDir -Directory | Where-Object { Test-Path "$($_.FullName)\docker-compose.yml" }
-        foreach ($app in $apps) {
-            Write-Host "Checking $($app.Name)..."
-            docker compose -f "$($app.FullName)\docker-compose.yml" ps
-        }
-    } else {
-        if (Test-Path "$script:AppsDir\$AppName\docker-compose.yml") {
-            docker compose -f "$script:AppsDir\$AppName\docker-compose.yml" ps
-        } else {
-            Write-Host "Error: Application '$AppName' not found" -ForegroundColor $Red
-            exit 1
-        }
-    }
-}
-
 # Function to get detailed application information
 function Get-ApplicationInfo {
     param (
@@ -440,60 +550,6 @@ function Restore-Application {
     Write-Host "Application restored successfully" -ForegroundColor $Green
 }
 
-# Function to clone a repository and add it as an application
-function Clone-App {
-    param (
-        [string]$RepoUrl,
-        [string]$AppName
-    )
-    
-    if ([string]::IsNullOrEmpty($RepoUrl) -or [string]::IsNullOrEmpty($AppName)) {
-        Write-Host "Error: Repository URL and application name required" -ForegroundColor $Red
-        Write-Host "Usage: dcm clone <repo_url> <app_name>"
-        exit 1
-    }
-
-    # Create temporary directory
-    $tempDir = Join-Path $env:TEMP ([System.Guid]::NewGuid().ToString())
-    New-Item -ItemType Directory -Force -Path $tempDir | Out-Null
-    
-    Write-Host "Cloning repository..."
-    try {
-        git clone $RepoUrl $tempDir
-    }
-    catch {
-        Write-Host "Error: Failed to clone repository" -ForegroundColor $Red
-        Remove-Item -Path $tempDir -Recurse -Force
-        exit 1
-    }
-
-    # Check if docker-compose.yml exists
-    if (-not (Test-Path "$tempDir\docker-compose.yml")) {
-        Write-Host "Error: Repository does not contain a docker-compose.yml file" -ForegroundColor $Red
-        Remove-Item -Path $tempDir -Recurse -Force
-        exit 1
-    }
-
-    # Create application directory
-    New-Item -ItemType Directory -Force -Path "$script:AppsDir\$AppName" | Out-Null
-
-    # Copy docker-compose.yml and .env if it exists
-    Copy-Item "$tempDir\docker-compose.yml" "$script:AppsDir\$AppName\"
-    if (Test-Path "$tempDir\.env") {
-        Copy-Item "$tempDir\.env" "$script:AppsDir\$AppName\"
-    }
-
-    # Copy any other relevant files (README.md, etc.)
-    if (Test-Path "$tempDir\README.md") {
-        Copy-Item "$tempDir\README.md" "$script:AppsDir\$AppName\"
-    }
-
-    # Cleanup
-    Remove-Item -Path $tempDir -Recurse -Force
-
-    Write-Host "Application '$AppName' cloned and added successfully" -ForegroundColor $Green
-}
-
 # Main script logic
 Test-Docker
 Load-Config
@@ -510,14 +566,18 @@ switch ($args[0]) {
     }
     "start" {
         if (-not $args[1]) {
-            $apps = Get-ChildItem -Path $script:AppsDir -Directory | Where-Object { Test-Path "$($_.FullName)\docker-compose.yml" }
+            $apps = Get-ChildItem -Path $script:AppsDir -Directory
             foreach ($app in $apps) {
-                Write-Host "Starting $($app.Name)..."
-                docker compose -f "$($app.FullName)\docker-compose.yml" up -d
+                $appPath = Get-AppPath $app.Name
+                if ($appPath) {
+                    Write-Host "Starting $($app.Name)..."
+                    docker compose -f "$appPath\docker-compose.yml" up -d
+                }
             }
         } else {
-            if (Test-Path "$script:AppsDir\$($args[1])\docker-compose.yml") {
-                docker compose -f "$script:AppsDir\$($args[1])\docker-compose.yml" up -d
+            $appPath = Get-AppPath $args[1]
+            if ($appPath) {
+                docker compose -f "$appPath\docker-compose.yml" up -d
             } else {
                 Write-Host "Error: Application '$($args[1])' not found" -ForegroundColor $Red
                 exit 1
@@ -526,14 +586,18 @@ switch ($args[0]) {
     }
     "stop" {
         if (-not $args[1]) {
-            $apps = Get-ChildItem -Path $script:AppsDir -Directory | Where-Object { Test-Path "$($_.FullName)\docker-compose.yml" }
+            $apps = Get-ChildItem -Path $script:AppsDir -Directory
             foreach ($app in $apps) {
-                Write-Host "Stopping $($app.Name)..."
-                docker compose -f "$($app.FullName)\docker-compose.yml" down
+                $appPath = Get-AppPath $app.Name
+                if ($appPath) {
+                    Write-Host "Stopping $($app.Name)..."
+                    docker compose -f "$appPath\docker-compose.yml" down
+                }
             }
         } else {
-            if (Test-Path "$script:AppsDir\$($args[1])\docker-compose.yml") {
-                docker compose -f "$script:AppsDir\$($args[1])\docker-compose.yml" down
+            $appPath = Get-AppPath $args[1]
+            if ($appPath) {
+                docker compose -f "$appPath\docker-compose.yml" down
             } else {
                 Write-Host "Error: Application '$($args[1])' not found" -ForegroundColor $Red
                 exit 1
@@ -542,14 +606,18 @@ switch ($args[0]) {
     }
     "restart" {
         if (-not $args[1]) {
-            $apps = Get-ChildItem -Path $script:AppsDir -Directory | Where-Object { Test-Path "$($_.FullName)\docker-compose.yml" }
+            $apps = Get-ChildItem -Path $script:AppsDir -Directory
             foreach ($app in $apps) {
-                Write-Host "Restarting $($app.Name)..."
-                docker compose -f "$($app.FullName)\docker-compose.yml" restart
+                $appPath = Get-AppPath $app.Name
+                if ($appPath) {
+                    Write-Host "Restarting $($app.Name)..."
+                    docker compose -f "$appPath\docker-compose.yml" restart
+                }
             }
         } else {
-            if (Test-Path "$script:AppsDir\$($args[1])\docker-compose.yml") {
-                docker compose -f "$script:AppsDir\$($args[1])\docker-compose.yml" restart
+            $appPath = Get-AppPath $args[1]
+            if ($appPath) {
+                docker compose -f "$appPath\docker-compose.yml" restart
             } else {
                 Write-Host "Error: Application '$($args[1])' not found" -ForegroundColor $Red
                 exit 1
@@ -558,14 +626,18 @@ switch ($args[0]) {
     }
     "logs" {
         if (-not $args[1]) {
-            $apps = Get-ChildItem -Path $script:AppsDir -Directory | Where-Object { Test-Path "$($_.FullName)\docker-compose.yml" }
+            $apps = Get-ChildItem -Path $script:AppsDir -Directory
             foreach ($app in $apps) {
-                Write-Host "Logs for $($app.Name):"
-                docker compose -f "$($app.FullName)\docker-compose.yml" logs
+                $appPath = Get-AppPath $app.Name
+                if ($appPath) {
+                    Write-Host "Logs for $($app.Name):"
+                    docker compose -f "$appPath\docker-compose.yml" logs
+                }
             }
         } else {
-            if (Test-Path "$script:AppsDir\$($args[1])\docker-compose.yml") {
-                docker compose -f "$script:AppsDir\$($args[1])\docker-compose.yml" logs
+            $appPath = Get-AppPath $args[1]
+            if ($appPath) {
+                docker compose -f "$appPath\docker-compose.yml" logs
             } else {
                 Write-Host "Error: Application '$($args[1])' not found" -ForegroundColor $Red
                 exit 1
@@ -573,21 +645,7 @@ switch ($args[0]) {
         }
     }
     "add" {
-        if (-not $args[1] -or -not $args[2]) {
-            Write-Host "Error: Application name and path required" -ForegroundColor $Red
-            Write-Host "Usage: dcm add <name> <path>"
-            exit 1
-        }
-        if (-not (Test-Path "$($args[2])\docker-compose.yml")) {
-            Write-Host "Error: docker-compose.yml not found in specified path" -ForegroundColor $Red
-            exit 1
-        }
-        New-Item -ItemType Directory -Force -Path "$script:AppsDir\$($args[1])" | Out-Null
-        Copy-Item "$($args[2])\docker-compose.yml" "$script:AppsDir\$($args[1])\"
-        if (Test-Path "$($args[2])\.env") {
-            Copy-Item "$($args[2])\.env" "$script:AppsDir\$($args[1])\"
-        }
-        Write-Host "Application '$($args[1])' added successfully" -ForegroundColor $Green
+        Add-App $args[1] $args[2]
     }
     "clone" {
         Clone-App $args[1] $args[2]
@@ -599,6 +657,11 @@ switch ($args[0]) {
             exit 1
         }
         if (Test-Path "$script:AppsDir\$($args[1])") {
+            # Remove from config
+            $config = Get-Content $AppsFile | ConvertFrom-Json
+            $config.apps.PSObject.Properties.Remove($args[1])
+            $config | ConvertTo-Json | Set-Content $AppsFile
+            # Remove directory
             Remove-Item -Path "$script:AppsDir\$($args[1])" -Recurse -Force
             Write-Host "Application '$($args[1])' removed successfully" -ForegroundColor $Green
         } else {
@@ -608,16 +671,20 @@ switch ($args[0]) {
     }
     "update" {
         if (-not $args[1]) {
-            $apps = Get-ChildItem -Path $script:AppsDir -Directory | Where-Object { Test-Path "$($_.FullName)\docker-compose.yml" }
+            $apps = Get-ChildItem -Path $script:AppsDir -Directory
             foreach ($app in $apps) {
-                Write-Host "Updating $($app.Name)..."
-                docker compose -f "$($app.FullName)\docker-compose.yml" pull
-                docker compose -f "$($app.FullName)\docker-compose.yml" up -d
+                $appPath = Get-AppPath $app.Name
+                if ($appPath) {
+                    Write-Host "Updating $($app.Name)..."
+                    docker compose -f "$appPath\docker-compose.yml" pull
+                    docker compose -f "$appPath\docker-compose.yml" up -d
+                }
             }
         } else {
-            if (Test-Path "$script:AppsDir\$($args[1])\docker-compose.yml") {
-                docker compose -f "$script:AppsDir\$($args[1])\docker-compose.yml" pull
-                docker compose -f "$script:AppsDir\$($args[1])\docker-compose.yml" up -d
+            $appPath = Get-AppPath $args[1]
+            if ($appPath) {
+                docker compose -f "$appPath\docker-compose.yml" pull
+                docker compose -f "$appPath\docker-compose.yml" up -d
             } else {
                 Write-Host "Error: Application '$($args[1])' not found" -ForegroundColor $Red
                 exit 1

@@ -36,86 +36,98 @@ load_config() {
     
     # Create apps directory if it doesn't exist
     mkdir -p "$APPS_DIR/backups"
-}
 
-# Function to display usage
-show_usage() {
-    echo "Docker Compose Manager"
-    echo "Usage: dcm [command] [options]"
-    echo ""
-    echo "Commands:"
-    echo "  list                    List all managed applications"
-    echo "  status [app]           Show status of all or specific application"
-    echo "  info [app]             Show detailed information about application"
-    echo "  start [app]            Start all or specific application"
-    echo "  stop [app]             Stop all or specific application"
-    echo "  restart [app]          Restart all or specific application"
-    echo "  logs [app]             Show logs for all or specific application"
-    echo "  add <name> <path>      Add new application to manage"
-    echo "  remove <app>           Remove application from management"
-    echo "  update [app]           Update all or specific application"
-    echo "  backup [app]           Backup application data and volumes"
-    echo "  restore <app> <backup> Restore application from backup"
-    echo "  create                 Create a new application from template"
-    echo "  clone <repo_url> <app_name> Clone and add application"
-    echo ""
-    echo "Options:"
-    echo "  -h, --help             Show this help message"
-}
-
-# Function to check if Docker is installed
-check_docker() {
-    if ! command -v docker &> /dev/null; then
-        echo -e "${RED}Error: Docker is not installed${NC}"
-        exit 1
-    fi
-    if ! command -v docker compose &> /dev/null; then
-        echo -e "${RED}Error: Docker Compose is not installed${NC}"
-        exit 1
-    fi
-    if ! command -v jq &> /dev/null; then
-        echo -e "${RED}Error: jq is not installed${NC}"
-        exit 1
+    # Load apps configuration
+    if [ ! -f "$APPS_FILE" ]; then
+        echo "{}" > "$APPS_FILE"
     fi
 }
 
-# Function to check if git is installed
-check_git() {
-    if ! command -v git &> /dev/null; then
-        echo "Git is not installed. Please install Git first."
+# Function to get application path
+get_app_path() {
+    local app=$1
+    local path=$(jq -r --arg app "$app" '.apps[$app].path' "$APPS_FILE")
+    if [ "$path" = "null" ]; then
+        echo ""
+    else
+        echo "$path"
+    fi
+}
+
+# Function to add application
+add_app() {
+    local app_name=$1
+    local app_path=$2
+
+    if [ -z "$app_name" ] || [ -z "$app_path" ]; then
+        echo -e "${RED}Error: Application name and path required${NC}"
+        echo "Usage: dcm add <name> <path>"
         exit 1
     fi
 
-    # Check if Git is configured
-    if [ -z "$(git config --global user.name)" ] || [ -z "$(git config --global user.email)" ]; then
-        echo "Git is not configured. Let's set it up globally."
-        read -p "Enter your name for Git: " git_name
-        read -p "Enter your email for Git: " git_email
-        
-        git config --global user.name "$git_name"
-        git config --global user.email "$git_email"
-        echo "Git has been configured globally with your information."
+    if [ ! -f "$app_path/docker-compose.yml" ]; then
+        echo -e "${RED}Error: docker-compose.yml not found in specified path${NC}"
+        exit 1
     fi
 
-    # Set default branch to main
-    git config --global init.defaultBranch main
+    # Create application directory
+    mkdir -p "$APPS_DIR/$app_name"
+
+    # Store application path in config
+    local config=$(cat "$APPS_FILE")
+    config=$(echo "$config" | jq --arg app "$app_name" --arg path "$app_path" '.apps[$app] = {"path": $path}')
+    echo "$config" > "$APPS_FILE"
+
+    # Copy README.md if it exists
+    if [ -f "$app_path/README.md" ]; then
+        cp "$app_path/README.md" "$APPS_DIR/$app_name/"
+    fi
+
+    echo -e "${GREEN}Application '$app_name' added successfully${NC}"
 }
 
-# Function to list all managed applications
-list_apps() {
-    if [ -z "$(ls -A "$APPS_DIR")" ]; then
-        echo "No applications are currently being managed."
-        return
+# Function to clone and add application
+clone_app() {
+    local repo_url=$1
+    local app_name=$2
+
+    if [ -z "$repo_url" ] || [ -z "$app_name" ]; then
+        echo -e "${RED}Error: Repository URL and application name required${NC}"
+        echo "Usage: dcm clone <repo_url> <app_name>"
+        exit 1
     fi
+
+    # Create temporary directory
+    local temp_dir=$(mktemp -d)
     
-    echo "Managed Applications:"
-    echo "-------------------"
-    for app in "$APPS_DIR"/*; do
-        if [ -d "$app" ] && [ -f "$app/docker-compose.yml" ]; then
-            app_name=$(basename "$app")
-            echo "- $app_name"
-        fi
-    done
+    echo "Cloning repository..."
+    if ! git clone "$repo_url" "$temp_dir"; then
+        echo -e "${RED}Error: Failed to clone repository${NC}"
+        rm -rf "$temp_dir"
+        exit 1
+    fi
+
+    # Check if docker-compose.yml exists
+    if [ ! -f "$temp_dir/docker-compose.yml" ]; then
+        echo -e "${RED}Error: Repository does not contain a docker-compose.yml file${NC}"
+        rm -rf "$temp_dir"
+        exit 1
+    fi
+
+    # Create application directory
+    mkdir -p "$APPS_DIR/$app_name"
+
+    # Store application path in config
+    local config=$(cat "$APPS_FILE")
+    config=$(echo "$config" | jq --arg app "$app_name" --arg path "$temp_dir" '.apps[$app] = {"path": $path}')
+    echo "$config" > "$APPS_FILE"
+
+    # Copy README.md if it exists
+    if [ -f "$temp_dir/README.md" ]; then
+        cp "$temp_dir/README.md" "$APPS_DIR/$app_name/"
+    fi
+
+    echo -e "${GREEN}Application '$app_name' cloned and added successfully${NC}"
 }
 
 # Function to get application status
@@ -123,15 +135,19 @@ get_status() {
     local app=$1
     if [ -z "$app" ]; then
         for app_dir in "$APPS_DIR"/*; do
-            if [ -d "$app_dir" ] && [ -f "$app_dir/docker-compose.yml" ]; then
+            if [ -d "$app_dir" ]; then
                 app_name=$(basename "$app_dir")
-                echo "Checking $app_name..."
-                docker compose -f "$app_dir/docker-compose.yml" ps
+                app_path=$(get_app_path "$app_name")
+                if [ ! -z "$app_path" ]; then
+                    echo "Checking $app_name..."
+                    docker compose -f "$app_path/docker-compose.yml" ps
+                fi
             fi
         done
     else
-        if [ -d "$APPS_DIR/$app" ] && [ -f "$APPS_DIR/$app/docker-compose.yml" ]; then
-            docker compose -f "$APPS_DIR/$app/docker-compose.yml" ps
+        app_path=$(get_app_path "$app")
+        if [ ! -z "$app_path" ]; then
+            docker compose -f "$app_path/docker-compose.yml" ps
         else
             echo -e "${RED}Error: Application '$app' not found${NC}"
             exit 1
@@ -148,7 +164,8 @@ get_app_info() {
         exit 1
     fi
 
-    if [ ! -d "$APPS_DIR/$app" ] || [ ! -f "$APPS_DIR/$app/docker-compose.yml" ]; then
+    app_path=$(get_app_path "$app")
+    if [ -z "$app_path" ]; then
         echo -e "${RED}Error: Application '$app' not found${NC}"
         exit 1
     fi
@@ -158,13 +175,13 @@ get_app_info() {
 
     # Get container status
     echo -e "${YELLOW}Container Status:${NC}"
-    docker compose -f "$APPS_DIR/$app/docker-compose.yml" ps
+    docker compose -f "$app_path/docker-compose.yml" ps
     echo
 
     # Get container resource usage
     echo -e "${YELLOW}Resource Usage:${NC}"
     echo "CPU and Memory usage for each container:"
-    for container in $(docker compose -f "$APPS_DIR/$app/docker-compose.yml" ps -q); do
+    for container in $(docker compose -f "$app_path/docker-compose.yml" ps -q); do
         echo -e "${GREEN}Container: $(docker inspect --format '{{.Name}}' $container)${NC}"
         docker stats --no-stream $container
     done
@@ -172,27 +189,27 @@ get_app_info() {
 
     # Get network information
     echo -e "${YELLOW}Network Information:${NC}"
-    docker compose -f "$APPS_DIR/$app/docker-compose.yml" network ls
+    docker compose -f "$app_path/docker-compose.yml" network ls
     echo
 
     # Get volume information
     echo -e "${YELLOW}Volume Information:${NC}"
-    docker compose -f "$APPS_DIR/$app/docker-compose.yml" volume ls
+    docker compose -f "$app_path/docker-compose.yml" volume ls
     echo
 
     # Get environment variables
     echo -e "${YELLOW}Environment Configuration:${NC}"
-    docker compose -f "$APPS_DIR/$app/docker-compose.yml" config
+    docker compose -f "$app_path/docker-compose.yml" config
     echo
 
     # Get recent logs
     echo -e "${YELLOW}Recent Logs (last 5 lines):${NC}"
-    docker compose -f "$APPS_DIR/$app/docker-compose.yml" logs --tail=5
+    docker compose -f "$app_path/docker-compose.yml" logs --tail=5
     echo
 
     # Get health status
     echo -e "${YELLOW}Health Status:${NC}"
-    for container in $(docker compose -f "$APPS_DIR/$app/docker-compose.yml" ps -q); do
+    for container in $(docker compose -f "$app_path/docker-compose.yml" ps -q); do
         health=$(docker inspect --format='{{.State.Health.Status}}' $container 2>/dev/null)
         if [ ! -z "$health" ]; then
             echo -e "${GREEN}Container: $(docker inspect --format '{{.Name}}' $container)${NC}"
@@ -476,10 +493,10 @@ clone_app() {
     # Create application directory
     mkdir -p "$APPS_DIR/$app_name"
 
-    # Copy docker-compose.yml and .env if it exists
-    cp "$temp_dir/docker-compose.yml" "$APPS_DIR/$app_name/"
+    # Create symbolic links for docker-compose.yml and .env if it exists
+    ln -sf "$temp_dir/docker-compose.yml" "$APPS_DIR/$app_name/docker-compose.yml"
     if [ -f "$temp_dir/.env" ]; then
-        cp "$temp_dir/.env" "$APPS_DIR/$app_name/"
+        ln -sf "$temp_dir/.env" "$APPS_DIR/$app_name/.env"
     fi
 
     # Copy any other relevant files (README.md, etc.)
@@ -590,9 +607,9 @@ case "$1" in
             exit 1
         fi
         mkdir -p "$APPS_DIR/$2"
-        cp "$3/docker-compose.yml" "$APPS_DIR/$2/"
+        ln -sf "$3/docker-compose.yml" "$APPS_DIR/$2/docker-compose.yml"
         if [ -f "$3/.env" ]; then
-            cp "$3/.env" "$APPS_DIR/$2/"
+            ln -sf "$3/.env" "$APPS_DIR/$2/.env"
         fi
         echo -e "${GREEN}Application '$2' added successfully${NC}"
         ;;

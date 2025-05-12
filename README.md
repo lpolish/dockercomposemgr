@@ -1,6 +1,156 @@
 # Docker Compose Manager
 
-A command-line tool for managing Docker Compose applications on Linux and Windows.
+A simple tool to manage multiple Docker Compose applications.
+
+## Directory Structure
+
+```
+~/dockerapps/
+├── apps.json           # Application configuration file
+├── backups/           # Backup directory
+└── app1/              # Application directory
+    └── README.md      # Application documentation
+```
+
+## Configuration
+
+The `apps.json` file stores the configuration for all managed applications in the following format:
+
+```json
+{
+  "apps": {
+    "app1": {
+      "path": "/path/to/original/app1"
+    },
+    "app2": {
+      "path": "/path/to/original/app2"
+    }
+  }
+}
+```
+
+## Available Commands
+
+- `list` - List all managed applications
+- `status` - Show status of applications
+- `info` - Show detailed information about an application
+- `start` - Start application(s)
+- `stop` - Stop application(s)
+- `restart` - Restart application(s)
+- `logs` - Show logs for application(s)
+- `add <name> <path>` - Add a new application by referencing its path
+- `clone <repo_url> <app_name>` - Clone a repository and add it as an application
+- `remove <app>` - Remove an application
+- `update` - Update application(s)
+- `backup` - Backup application(s)
+- `restore` - Restore application(s)
+- `create` - Create a new application from template
+
+## Adding Applications
+
+When adding a new application, the system will:
+1. Create a directory for the application in `~/dockerapps/`
+2. Store the original path in `apps.json`
+3. Copy any README.md file if it exists
+4. Use the original docker-compose.yml file directly from the source path
+
+Example:
+```bash
+dcm add myapp /path/to/myapp
+```
+
+## Cloning Applications
+
+When cloning a repository, the system will:
+1. Clone the repository to a temporary directory
+2. Create a directory for the application in `~/dockerapps/`
+3. Store the cloned repository path in `apps.json`
+4. Copy any README.md file if it exists
+5. Use the docker-compose.yml file directly from the cloned repository
+
+Example:
+```bash
+dcm clone https://github.com/user/repo.git myapp
+```
+
+## Best Practices
+
+1. **Application Organization**
+   - Keep original docker-compose files in their source locations
+   - Use the manager to reference and manage these applications
+   - Store application-specific documentation in the application directory
+
+2. **Configuration**
+   - Use environment variables in .env files for configuration
+   - Keep sensitive data in .env files
+   - Use docker-compose.yml for container configuration
+
+3. **Data Management**
+   - Use named volumes for persistent data
+   - Backup important data regularly
+   - Use the backup/restore commands for application data
+
+4. **Documentation**
+   - Include a README.md in each application directory
+   - Document any special configuration requirements
+   - Keep track of application dependencies
+
+## Examples
+
+### Adding an Existing Application
+
+```bash
+# Add an application from a local path
+dcm add myapp /path/to/myapp
+
+# Check its status
+dcm status myapp
+
+# Start the application
+dcm start myapp
+```
+
+### Cloning and Managing a Repository
+
+```bash
+# Clone a repository
+dcm clone https://github.com/user/repo.git myapp
+
+# Check its status
+dcm status myapp
+
+# Start the application
+dcm start myapp
+```
+
+### Managing Multiple Applications
+
+```bash
+# List all applications
+dcm list
+
+# Start all applications
+dcm start
+
+# Check status of all applications
+dcm status
+
+# Update all applications
+dcm update
+```
+
+### Backup and Restore
+
+```bash
+# Backup all applications
+dcm backup
+
+# Backup a specific application
+dcm backup myapp
+
+# Restore an application
+dcm restore myapp backup_file.tar.gz
+```
 
 ## Features
 
