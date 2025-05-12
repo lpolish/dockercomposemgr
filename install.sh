@@ -48,21 +48,13 @@ detect_distro() {
 
 # Function to install Docker
 install_docker() {
-    echo -e "${BLUE}Installing Docker...${NC}"
-    
     # Check if we're in a container
-    local in_container=false
     if [ -f /.dockerenv ] || [ -f /run/.containerenv ]; then
-        in_container=true
-        echo -e "${YELLOW}Detected container environment${NC}"
-        
-        # Check if container is privileged
-        if [ ! -w /dev ]; then
-            echo -e "${RED}Error: Container is not privileged${NC}"
-            echo "Please run the container with --privileged flag"
-            exit 1
-        fi
+        echo -e "${YELLOW}Skipping Docker installation in container${NC}"
+        return 0
     fi
+
+    echo -e "${BLUE}Installing Docker...${NC}"
     
     case $OS in
         "Ubuntu"|"Debian GNU/Linux")
@@ -93,17 +85,10 @@ install_docker() {
             apt-get update
             apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
             
-            if [ "$in_container" = true ]; then
-                # In container, start Docker daemon directly
-                echo -e "${YELLOW}Starting Docker daemon in container...${NC}"
-                dockerd > /dev/null 2>&1 &
-                sleep 5  # Give Docker daemon time to start
-            else
-                # On host system, use systemd
-                systemctl start docker || true
-                # Add current user to docker group
-                usermod -aG docker $SUDO_USER
-            fi
+            # On host system, use systemd
+            systemctl start docker || true
+            # Add current user to docker group
+            usermod -aG docker $SUDO_USER
             ;;
             
         "CentOS Linux"|"Red Hat Enterprise Linux")
@@ -119,18 +104,11 @@ install_docker() {
             # Install Docker Engine
             yum install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
             
-            if [ "$in_container" = true ]; then
-                # In container, start Docker daemon directly
-                echo -e "${YELLOW}Starting Docker daemon in container...${NC}"
-                dockerd > /dev/null 2>&1 &
-                sleep 5  # Give Docker daemon time to start
-            else
-                # On host system, use systemd
-                systemctl start docker || true
-                systemctl enable docker || true
-                # Add current user to docker group
-                usermod -aG docker $SUDO_USER
-            fi
+            # On host system, use systemd
+            systemctl start docker || true
+            systemctl enable docker || true
+            # Add current user to docker group
+            usermod -aG docker $SUDO_USER
             ;;
             
         *)
@@ -152,11 +130,7 @@ install_docker() {
     done
     
     echo -e "${RED}Error: Docker installation failed${NC}"
-    if [ "$in_container" = true ]; then
-        echo "Please make sure you're running the container with --privileged flag"
-    else
-        echo "Please check the installation logs for more information"
-    fi
+    echo "Please check the installation logs for more information"
     exit 1
 }
 
@@ -266,21 +240,9 @@ install() {
     # Detect Linux distribution
     detect_distro
     
-    # Check if we're in a container
-    local in_container=false
-    if [ -f /.dockerenv ] || [ -f /run/.containerenv ]; then
-        in_container=true
-        echo -e "${YELLOW}Detected container environment - skipping Docker installation${NC}"
-        
-        # Check if Docker is available
-        if ! command -v docker &> /dev/null; then
-            echo -e "${YELLOW}Warning: Docker is not installed in the container${NC}"
-            echo "The management program will be installed, but Docker commands will not work"
-        fi
-    else
-        # Install Docker and dependencies only if not in container
-        install_docker
-    fi
+    # Install Docker and dependencies only if not in container
+    echo -e "${BLUE}Installing Docker...${NC}"
+    install_docker
     
     # Download management script
     echo -e "${BLUE}Downloading management script...${NC}"
@@ -294,9 +256,7 @@ install() {
     create_apps_directory
     
     echo -e "${GREEN}Docker Compose Manager installed successfully${NC}"
-    if [ "$in_container" = false ]; then
-        echo -e "${YELLOW}Please log out and log back in for Docker group changes to take effect${NC}"
-    fi
+    echo -e "${YELLOW}Please log out and log back in for Docker group changes to take effect${NC}"
 }
 
 # Function to uninstall Docker Compose Manager
