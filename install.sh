@@ -273,6 +273,7 @@ install() {
     
     echo -e "${GREEN}Docker Compose Manager installed successfully${NC}"
     echo -e "${YELLOW}Please log out and log back in for Docker group changes to take effect${NC}"
+    echo -e "${YELLOW}You can now use the 'dcm' command to manage your Docker Compose applications${NC}"
 }
 
 # Function to uninstall Docker Compose Manager
