@@ -266,8 +266,21 @@ install() {
     # Detect Linux distribution
     detect_distro
     
-    # Install Docker and dependencies
-    install_docker
+    # Check if we're in a container
+    local in_container=false
+    if [ -f /.dockerenv ] || [ -f /run/.containerenv ]; then
+        in_container=true
+        echo -e "${YELLOW}Detected container environment - skipping Docker installation${NC}"
+        
+        # Check if Docker is available
+        if ! command -v docker &> /dev/null; then
+            echo -e "${YELLOW}Warning: Docker is not installed in the container${NC}"
+            echo "The management program will be installed, but Docker commands will not work"
+        fi
+    else
+        # Install Docker and dependencies only if not in container
+        install_docker
+    fi
     
     # Download management script
     echo -e "${BLUE}Downloading management script...${NC}"
@@ -281,7 +294,9 @@ install() {
     create_apps_directory
     
     echo -e "${GREEN}Docker Compose Manager installed successfully${NC}"
-    echo -e "${YELLOW}Please log out and log back in for Docker group changes to take effect${NC}"
+    if [ "$in_container" = false ]; then
+        echo -e "${YELLOW}Please log out and log back in for Docker group changes to take effect${NC}"
+    fi
 }
 
 # Function to uninstall Docker Compose Manager
