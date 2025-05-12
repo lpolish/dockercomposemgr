@@ -170,6 +170,7 @@ dcm restore myapp backup_file.tar.gz
 - Docker Compose installed
 - Git installed
 - Bash shell
+- Either curl or wget installed (wget can be installed with `apt-get install wget` on Ubuntu/Debian)
 
 ### Windows
 - Windows 10/11
@@ -182,13 +183,17 @@ dcm restore myapp backup_file.tar.gz
 ### Linux
 You can install the tool with a single command using either curl or wget:
 
-Using curl:
+Using curl (recommended, comes pre-installed on most systems):
 ```bash
 curl -fsSL https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/install.sh | bash
 ```
 
-Or using wget:
+Or using wget (if you prefer, may need to be installed first):
 ```bash
+# Install wget if not already installed (Ubuntu/Debian)
+sudo apt-get update && sudo apt-get install -y wget
+
+# Then run the installation
 wget -qO- https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/install.sh | bash
 ```
 
