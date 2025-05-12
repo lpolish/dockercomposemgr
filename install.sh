@@ -50,6 +50,12 @@ detect_distro() {
 install_docker() {
     echo -e "${BLUE}Installing Docker...${NC}"
     
+    # Check if we're in a container
+    local in_container=false
+    if [ -f /.dockerenv ] || [ -f /run/.containerenv ]; then
+        in_container=true
+    fi
+    
     case $OS in
         "Ubuntu"|"Debian GNU/Linux")
             # Remove old versions
@@ -79,11 +85,14 @@ install_docker() {
             apt-get update
             apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
             
-            # Start Docker service
-            systemctl start docker || true
-            
-            # Add current user to docker group if not in container
-            if [ -z "$(cat /proc/1/cgroup | grep docker)" ]; then
+            if [ "$in_container" = true ]; then
+                # In container, start Docker daemon directly
+                dockerd > /dev/null 2>&1 &
+                sleep 5  # Give Docker daemon time to start
+            else
+                # On host system, use systemd
+                systemctl start docker || true
+                # Add current user to docker group
                 usermod -aG docker $SUDO_USER
             fi
             ;;
@@ -101,12 +110,15 @@ install_docker() {
             # Install Docker Engine
             yum install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
             
-            # Start and enable Docker
-            systemctl start docker || true
-            systemctl enable docker || true
-            
-            # Add current user to docker group if not in container
-            if [ -z "$(cat /proc/1/cgroup | grep docker)" ]; then
+            if [ "$in_container" = true ]; then
+                # In container, start Docker daemon directly
+                dockerd > /dev/null 2>&1 &
+                sleep 5  # Give Docker daemon time to start
+            else
+                # On host system, use systemd
+                systemctl start docker || true
+                systemctl enable docker || true
+                # Add current user to docker group
                 usermod -aG docker $SUDO_USER
             fi
             ;;
@@ -118,12 +130,20 @@ install_docker() {
     esac
     
     # Verify Docker installation
-    if ! docker info &> /dev/null; then
-        echo -e "${RED}Error: Docker installation failed${NC}"
-        exit 1
-    fi
+    local retries=5
+    local count=0
+    while [ $count -lt $retries ]; do
+        if docker info &> /dev/null; then
+            echo -e "${GREEN}Docker installed successfully${NC}"
+            return 0
+        fi
+        count=$((count + 1))
+        sleep 2
+    done
     
-    echo -e "${GREEN}Docker installed successfully${NC}"
+    echo -e "${RED}Error: Docker installation failed${NC}"
+    echo "Please make sure you're running the container with --privileged flag"
+    exit 1
 }
 
 # Function to create default configuration
