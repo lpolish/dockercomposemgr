@@ -53,7 +53,7 @@ install_docker() {
     case $OS in
         "Ubuntu"|"Debian GNU/Linux")
             # Remove old versions
-            apt-get remove -y docker docker-engine docker.io containerd runc
+            apt-get remove -y docker docker-engine docker.io containerd runc || true
             
             # Update package index
             apt-get update
@@ -79,13 +79,18 @@ install_docker() {
             apt-get update
             apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
             
-            # Add current user to docker group
-            usermod -aG docker $SUDO_USER
+            # Start Docker service
+            systemctl start docker || true
+            
+            # Add current user to docker group if not in container
+            if [ -z "$(cat /proc/1/cgroup | grep docker)" ]; then
+                usermod -aG docker $SUDO_USER
+            fi
             ;;
             
         "CentOS Linux"|"Red Hat Enterprise Linux")
             # Remove old versions
-            yum remove -y docker docker-client docker-client-latest docker-common docker-latest docker-latest-logrotate docker-logrotate docker-engine
+            yum remove -y docker docker-client docker-client-latest docker-common docker-latest docker-latest-logrotate docker-logrotate docker-engine || true
             
             # Install prerequisites
             yum install -y yum-utils jq
@@ -97,11 +102,13 @@ install_docker() {
             yum install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
             
             # Start and enable Docker
-            systemctl start docker
-            systemctl enable docker
+            systemctl start docker || true
+            systemctl enable docker || true
             
-            # Add current user to docker group
-            usermod -aG docker $SUDO_USER
+            # Add current user to docker group if not in container
+            if [ -z "$(cat /proc/1/cgroup | grep docker)" ]; then
+                usermod -aG docker $SUDO_USER
+            fi
             ;;
             
         *)
@@ -109,6 +116,12 @@ install_docker() {
             exit 1
             ;;
     esac
+    
+    # Verify Docker installation
+    if ! docker info &> /dev/null; then
+        echo -e "${RED}Error: Docker installation failed${NC}"
+        exit 1
+    fi
     
     echo -e "${GREEN}Docker installed successfully${NC}"
 }

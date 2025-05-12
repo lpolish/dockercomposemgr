@@ -16,6 +16,47 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Function to check if Docker is installed and running
+check_docker() {
+    if ! command -v docker &> /dev/null; then
+        echo -e "${RED}Error: Docker is not installed${NC}"
+        echo "Please run the installer first:"
+        echo "curl -fsSL https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/install.sh | bash"
+        exit 1
+    fi
+    
+    if ! docker info &> /dev/null; then
+        echo -e "${RED}Error: Docker daemon is not running${NC}"
+        echo "Please start the Docker daemon and try again"
+        exit 1
+    fi
+}
+
+# Function to display usage
+show_usage() {
+    echo "Docker Compose Manager"
+    echo "Usage: dcm [command] [options]"
+    echo ""
+    echo "Commands:"
+    echo "  list                    List all applications"
+    echo "  add <name> <path>       Add a new application"
+    echo "  clone <repo> <name>     Clone and add an application from a repository"
+    echo "  remove <name>           Remove an application"
+    echo "  start <name>            Start an application"
+    echo "  stop <name>             Stop an application"
+    echo "  restart <name>          Restart an application"
+    echo "  status [name]           Show application status"
+    echo "  logs <name>             Show application logs"
+    echo "  info <name>             Show detailed application information"
+    echo "  backup <name>           Backup an application"
+    echo "  restore <name> <backup> Restore an application from backup"
+    echo "  update <name>           Update an application"
+    echo "  help                    Show this help message"
+    echo ""
+    echo "Options:"
+    echo "  -h, --help              Show this help message"
+}
+
 # Function to load configuration
 load_config() {
     if [ ! -f "$CONFIG_FILE" ]; then
@@ -460,54 +501,6 @@ create_app() {
 
     echo -e "${GREEN}Application created successfully in $app_dir${NC}"
     echo "You can now start developing your application"
-}
-
-# Function to clone and add application
-clone_app() {
-    local repo_url=$1
-    local app_name=$2
-
-    if [ -z "$repo_url" ] || [ -z "$app_name" ]; then
-        echo -e "${RED}Error: Repository URL and application name required${NC}"
-        echo "Usage: dcm clone <repo_url> <app_name>"
-        exit 1
-    fi
-
-    # Create temporary directory
-    local temp_dir=$(mktemp -d)
-    
-    echo "Cloning repository..."
-    if ! git clone "$repo_url" "$temp_dir"; then
-        echo -e "${RED}Error: Failed to clone repository${NC}"
-        rm -rf "$temp_dir"
-        exit 1
-    fi
-
-    # Check if docker-compose.yml exists
-    if [ ! -f "$temp_dir/docker-compose.yml" ]; then
-        echo -e "${RED}Error: Repository does not contain a docker-compose.yml file${NC}"
-        rm -rf "$temp_dir"
-        exit 1
-    fi
-
-    # Create application directory
-    mkdir -p "$APPS_DIR/$app_name"
-
-    # Create symbolic links for docker-compose.yml and .env if it exists
-    ln -sf "$temp_dir/docker-compose.yml" "$APPS_DIR/$app_name/docker-compose.yml"
-    if [ -f "$temp_dir/.env" ]; then
-        ln -sf "$temp_dir/.env" "$APPS_DIR/$app_name/.env"
-    fi
-
-    # Copy any other relevant files (README.md, etc.)
-    if [ -f "$temp_dir/README.md" ]; then
-        cp "$temp_dir/README.md" "$APPS_DIR/$app_name/"
-    fi
-
-    # Cleanup
-    rm -rf "$temp_dir"
-
-    echo -e "${GREEN}Application '$app_name' cloned and added successfully${NC}"
 }
 
 # Main script logic
