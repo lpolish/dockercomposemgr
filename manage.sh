@@ -129,8 +129,15 @@ add_app() {
     mkdir -p "$APPS_DIR/$app_name"
 
     # Store application path in config
-    local config=$(cat "$APPS_FILE")
-    config=$(echo "$config" | jq --arg app "$app_name" --arg path "$app_path" '.apps[$app] = {"path": $path}')
+    local config
+    if [ -f "$APPS_FILE" ]; then
+        config=$(cat "$APPS_FILE")
+    else
+        config='{"version": "1.0.0", "apps": {}, "last_updated": null}'
+    fi
+
+    # Update the config with the new app
+    config=$(echo "$config" | jq --arg app "$app_name" --arg path "$app_path" '.apps[$app] = {"path": $path} | .last_updated = now')
     echo "$config" > "$APPS_FILE"
 
     # Create symbolic links with normalized paths
