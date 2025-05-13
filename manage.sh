@@ -125,6 +125,10 @@ add_app() {
         exit 1
     fi
 
+    # Ensure config directory exists
+    mkdir -p "$CONFIG_DIR"
+    chmod 755 "$CONFIG_DIR"
+
     # Create application directory
     mkdir -p "$APPS_DIR/$app_name"
 
@@ -139,6 +143,7 @@ add_app() {
     # Update the config with the new app
     config=$(echo "$config" | jq --arg app "$app_name" --arg path "$app_path" '.apps[$app] = {"path": $path} | .last_updated = now')
     echo "$config" > "$APPS_FILE"
+    chmod 644 "$APPS_FILE"
 
     # Create symbolic links with normalized paths
     ln -sf "$(realpath "$app_path/docker-compose.yml")" "$APPS_DIR/$app_name/docker-compose.yml"
