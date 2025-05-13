@@ -608,167 +608,84 @@ function Update-Script {
 }
 
 # Main script logic
-Test-Docker
-Load-Config
+if ($args.Count -eq 0) {
+    Show-Menu
+    exit 0
+}
 
 switch ($args[0]) {
     "list" {
-        Get-Applications
-    }
-    "status" {
-        Get-ApplicationStatus $args[1]
-    }
-    "info" {
-        Get-ApplicationInfo $args[1]
+        List-Apps
     }
     "start" {
-        if (-not $args[1]) {
-            $apps = Get-ChildItem -Path $script:AppsDir -Directory
-            foreach ($app in $apps) {
-                $appPath = Get-AppPath $app.Name
-                if ($appPath) {
-                    Write-Host "Starting $($app.Name)..." -ForegroundColor $Cyan
-                    docker compose -f "$appPath\docker-compose.yml" up -d
-                }
-            }
-        } else {
-            $appPath = Get-AppPath $args[1]
-            if ($appPath) {
-                docker compose -f "$appPath\docker-compose.yml" up -d
-            } else {
-                Write-Host "Error: Application '$($args[1])' not found" -ForegroundColor $Red
-                exit 1
-            }
+        if ($args.Count -lt 2) {
+            Write-Host "Error: Application name is required" -ForegroundColor $RED
+            Write-Host "Usage: dcm start <app_name>"
+            exit 1
         }
+        Start-App $args[1]
     }
     "stop" {
-        if (-not $args[1]) {
-            $apps = Get-ChildItem -Path $script:AppsDir -Directory
-            foreach ($app in $apps) {
-                $appPath = Get-AppPath $app.Name
-                if ($appPath) {
-                    Write-Host "Stopping $($app.Name)..."
-                    docker compose -f "$appPath\docker-compose.yml" down
-                }
-            }
-        } else {
-            $appPath = Get-AppPath $args[1]
-            if ($appPath) {
-                docker compose -f "$appPath\docker-compose.yml" down
-            } else {
-                Write-Host "Error: Application '$($args[1])' not found" -ForegroundColor $Red
-                exit 1
-            }
+        if ($args.Count -lt 2) {
+            Write-Host "Error: Application name is required" -ForegroundColor $RED
+            Write-Host "Usage: dcm stop <app_name>"
+            exit 1
         }
+        Stop-App $args[1]
     }
     "restart" {
-        if (-not $args[1]) {
-            $apps = Get-ChildItem -Path $script:AppsDir -Directory
-            foreach ($app in $apps) {
-                $appPath = Get-AppPath $app.Name
-                if ($appPath) {
-                    Write-Host "Restarting $($app.Name)..."
-                    docker compose -f "$appPath\docker-compose.yml" restart
-                }
-            }
-        } else {
-            $appPath = Get-AppPath $args[1]
-            if ($appPath) {
-                docker compose -f "$appPath\docker-compose.yml" restart
-            } else {
-                Write-Host "Error: Application '$($args[1])' not found" -ForegroundColor $Red
-                exit 1
-            }
+        if ($args.Count -lt 2) {
+            Write-Host "Error: Application name is required" -ForegroundColor $RED
+            Write-Host "Usage: dcm restart <app_name>"
+            exit 1
         }
+        Restart-App $args[1]
     }
     "logs" {
-        if (-not $args[1]) {
-            $apps = Get-ChildItem -Path $script:AppsDir -Directory
-            foreach ($app in $apps) {
-                $appPath = Get-AppPath $app.Name
-                if ($appPath) {
-                    Write-Host "Logs for $($app.Name):"
-                    docker compose -f "$appPath\docker-compose.yml" logs
-                }
-            }
-        } else {
-            $appPath = Get-AppPath $args[1]
-            if ($appPath) {
-                docker compose -f "$appPath\docker-compose.yml" logs
-            } else {
-                Write-Host "Error: Application '$($args[1])' not found" -ForegroundColor $Red
-                exit 1
-            }
+        if ($args.Count -lt 2) {
+            Write-Host "Error: Application name is required" -ForegroundColor $RED
+            Write-Host "Usage: dcm logs <app_name>"
+            exit 1
         }
+        Show-Logs $args[1]
     }
     "add" {
         if ($args.Count -lt 3) {
-            Write-Host "Error: Missing required arguments" -ForegroundColor $RED
-            Write-Host "Usage: dcm add <app_name> <path>" -ForegroundColor $YELLOW
+            Write-Host "Error: Application name and path are required" -ForegroundColor $RED
+            Write-Host "Usage: dcm add <app_name> <path>"
             exit 1
         }
         Add-App $args[1] $args[2]
     }
-    "clone" {
-        Clone-App $args[1] $args[2]
-    }
     "remove" {
         if ($args.Count -lt 2) {
-            Write-Host "Error: Missing required arguments" -ForegroundColor $RED
-            Write-Host "Usage: dcm remove <app_name>" -ForegroundColor $YELLOW
+            Write-Host "Error: Application name is required" -ForegroundColor $RED
+            Write-Host "Usage: dcm remove <app_name>"
             exit 1
         }
-        if (Test-Path "$script:AppsDir\$($args[1])") {
-            # Remove from config
-            $config = Get-Content $AppsFile | ConvertFrom-Json
-            $config.apps.PSObject.Properties.Remove($args[1])
-            $config | ConvertTo-Json | Set-Content $AppsFile
-            # Remove directory
-            Remove-Item -Path "$script:AppsDir\$($args[1])" -Recurse -Force
-            Write-Host "Application '$($args[1])' removed successfully" -ForegroundColor $Green
-        } else {
-            Write-Host "Error: Application '$($args[1])' not found" -ForegroundColor $Red
-            exit 1
-        }
-    }
-    "update" {
-        if (-not $args[1]) {
-            $apps = Get-ChildItem -Path $script:AppsDir -Directory
-            foreach ($app in $apps) {
-                $appPath = Get-AppPath $app.Name
-                if ($appPath) {
-                    Write-Host "Updating $($app.Name)..."
-                    docker compose -f "$appPath\docker-compose.yml" pull
-                    docker compose -f "$appPath\docker-compose.yml" up -d
-                }
-            }
-        } else {
-            $appPath = Get-AppPath $args[1]
-            if ($appPath) {
-                docker compose -f "$appPath\docker-compose.yml" pull
-                docker compose -f "$appPath\docker-compose.yml" up -d
-            } else {
-                Write-Host "Error: Application '$($args[1])' not found" -ForegroundColor $Red
-                exit 1
-            }
-        }
+        Remove-App $args[1]
     }
     "backup" {
-        Backup-Application $args[1]
+        if ($args.Count -lt 2) {
+            Write-Host "Error: Application name is required" -ForegroundColor $RED
+            Write-Host "Usage: dcm backup <app_name>"
+            exit 1
+        }
+        Backup-App $args[1]
     }
     "restore" {
-        Restore-Application $args[1] $args[2]
-    }
-    "create" {
-        Create-App
+        if ($args.Count -lt 3) {
+            Write-Host "Error: Application name and backup name are required" -ForegroundColor $RED
+            Write-Host "Usage: dcm restore <app_name> <backup_name>"
+            exit 1
+        }
+        Restore-App $args[1] $args[2]
     }
     "self-update" {
         Update-Script
     }
-    "-h" { Show-Usage }
-    "--help" { Show-Usage }
     default {
-        Write-Host "Error: Unknown command" -ForegroundColor $Red
+        Write-Host "Unknown command: $($args[0])" -ForegroundColor $RED
         Show-Usage
         exit 1
     }

@@ -623,175 +623,85 @@ self_update() {
 }
 
 # Main script logic
-check_docker
-load_config
+if [ $# -eq 0 ]; then
+    show_menu
+    exit 0
+fi
 
 case "$1" in
-    list)
+    "list")
         list_apps
         ;;
-    status)
-        get_status "$2"
-        ;;
-    info)
-        get_app_info "$2"
-        ;;
-    start)
+    "start")
         if [ -z "$2" ]; then
-            for app_dir in "$APPS_DIR"/*; do
-                if [ -d "$app_dir" ] && [ -f "$app_dir/docker-compose.yml" ]; then
-                    app_name=$(basename "$app_dir")
-                    echo "Starting $app_name..."
-                    docker compose -f "$app_dir/docker-compose.yml" up -d
-                fi
-            done
-        else
-            if [ -d "$APPS_DIR/$2" ] && [ -f "$APPS_DIR/$2/docker-compose.yml" ]; then
-                docker compose -f "$APPS_DIR/$2/docker-compose.yml" up -d
-            else
-                echo -e "${RED}Error: Application '$2' not found${NC}"
-                exit 1
-            fi
+            echo -e "${RED}Error: Application name is required${NC}"
+            echo "Usage: dcm start <app_name>"
+            exit 1
         fi
+        start_app "$2"
         ;;
-    stop)
+    "stop")
         if [ -z "$2" ]; then
-            for app_dir in "$APPS_DIR"/*; do
-                if [ -d "$app_dir" ] && [ -f "$app_dir/docker-compose.yml" ]; then
-                    app_name=$(basename "$app_dir")
-                    echo "Stopping $app_name..."
-                    docker compose -f "$app_dir/docker-compose.yml" down
-                fi
-            done
-        else
-            if [ -d "$APPS_DIR/$2" ] && [ -f "$APPS_DIR/$2/docker-compose.yml" ]; then
-                docker compose -f "$APPS_DIR/$2/docker-compose.yml" down
-            else
-                echo -e "${RED}Error: Application '$2' not found${NC}"
-                exit 1
-            fi
+            echo -e "${RED}Error: Application name is required${NC}"
+            echo "Usage: dcm stop <app_name>"
+            exit 1
         fi
+        stop_app "$2"
         ;;
-    restart)
+    "restart")
         if [ -z "$2" ]; then
-            for app_dir in "$APPS_DIR"/*; do
-                if [ -d "$app_dir" ] && [ -f "$app_dir/docker-compose.yml" ]; then
-                    app_name=$(basename "$app_dir")
-                    echo "Restarting $app_name..."
-                    docker compose -f "$app_dir/docker-compose.yml" restart
-                fi
-            done
-        else
-            if [ -d "$APPS_DIR/$2" ] && [ -f "$APPS_DIR/$2/docker-compose.yml" ]; then
-                docker compose -f "$APPS_DIR/$2/docker-compose.yml" restart
-            else
-                echo -e "${RED}Error: Application '$2' not found${NC}"
-                exit 1
-            fi
+            echo -e "${RED}Error: Application name is required${NC}"
+            echo "Usage: dcm restart <app_name>"
+            exit 1
         fi
+        restart_app "$2"
         ;;
-    logs)
+    "logs")
         if [ -z "$2" ]; then
-            for app_dir in "$APPS_DIR"/*; do
-                if [ -d "$app_dir" ] && [ -f "$app_dir/docker-compose.yml" ]; then
-                    app_name=$(basename "$app_dir")
-                    echo "Logs for $app_name:"
-                    docker compose -f "$app_dir/docker-compose.yml" logs
-                fi
-            done
-        else
-            if [ -d "$APPS_DIR/$2" ] && [ -f "$APPS_DIR/$2/docker-compose.yml" ]; then
-                docker compose -f "$APPS_DIR/$2/docker-compose.yml" logs
-            else
-                echo -e "${RED}Error: Application '$2' not found${NC}"
-                exit 1
-            fi
+            echo -e "${RED}Error: Application name is required${NC}"
+            echo "Usage: dcm logs <app_name>"
+            exit 1
         fi
+        show_logs "$2"
         ;;
-    add)
-        if [ $# -lt 3 ]; then
-            echo -e "${RED}Error: Missing required arguments${NC}"
-            echo -e "${YELLOW}Usage: dcm add <app_name> <path>${NC}"
+    "add")
+        if [ -z "$2" ] || [ -z "$3" ]; then
+            echo -e "${RED}Error: Application name and path are required${NC}"
+            echo "Usage: dcm add <app_name> <path>"
             exit 1
         fi
         add_app "$2" "$3"
         ;;
-    clone)
-        clone_app "$2" "$3"
-        ;;
-    remove)
-        if [ $# -lt 2 ]; then
-            echo -e "${RED}Error: Missing required arguments${NC}"
-            echo -e "${YELLOW}Usage: dcm remove <app_name>${NC}"
-            exit 1
-        fi
-        if [ -d "$APPS_DIR/$2" ]; then
-            # Ask for confirmation
-            read -p "Are you sure you want to remove application '$2'? [y/N] " -n 1 -r
-            echo
-            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-                echo "Operation cancelled"
-                exit 0
-            fi
-
-            # Remove from config
-            config=$(cat "$APPS_FILE")
-            config=$(echo "$config" | jq --arg app "$2" 'del(.apps[$app])')
-            echo "$config" > "$APPS_FILE"
-            # Remove directory
-            rm -rf "$APPS_DIR/$2"
-            echo -e "${GREEN}Application '$2' removed successfully${NC}"
-        else
-            echo -e "${RED}Error: Application '$2' not found${NC}"
-            exit 1
-        fi
-        ;;
-    update)
+    "remove")
         if [ -z "$2" ]; then
-            for app_dir in "$APPS_DIR"/*; do
-                if [ -d "$app_dir" ] && [ -f "$app_dir/docker-compose.yml" ]; then
-                    app_name=$(basename "$app_dir")
-                    echo "Updating $app_name..."
-                    docker compose -f "$app_dir/docker-compose.yml" pull
-                    docker compose -f "$app_dir/docker-compose.yml" up -d
-                fi
-            done
-        else
-            if [ -d "$APPS_DIR/$2" ] && [ -f "$APPS_DIR/$2/docker-compose.yml" ]; then
-                docker compose -f "$APPS_DIR/$2/docker-compose.yml" pull
-                docker compose -f "$APPS_DIR/$2/docker-compose.yml" up -d
-            else
-                echo -e "${RED}Error: Application '$2' not found${NC}"
-                exit 1
-            fi
+            echo -e "${RED}Error: Application name is required${NC}"
+            echo "Usage: dcm remove <app_name>"
+            exit 1
         fi
+        remove_app "$2"
         ;;
-    backup)
+    "backup")
+        if [ -z "$2" ]; then
+            echo -e "${RED}Error: Application name is required${NC}"
+            echo "Usage: dcm backup <app_name>"
+            exit 1
+        fi
         backup_app "$2"
         ;;
-    restore)
+    "restore")
+        if [ -z "$2" ] || [ -z "$3" ]; then
+            echo -e "${RED}Error: Application name and backup name are required${NC}"
+            echo "Usage: dcm restore <app_name> <backup_name>"
+            exit 1
+        fi
         restore_app "$2" "$3"
         ;;
-    create)
-        create_app
-        ;;
-    self-update)
+    "self-update")
         self_update
         ;;
-    -h|--help)
-        show_usage
-        ;;
     *)
-        echo -e "${RED}Error: Unknown command '$1'${NC}"
-        echo -e "${YELLOW}Usage: dcm <command> [args]${NC}"
-        echo -e "${YELLOW}Commands:${NC}"
-        echo -e "${YELLOW}  add <app_name> <path>    Add a new application${NC}"
-        echo -e "${YELLOW}  remove <app_name>        Remove an application${NC}"
-        echo -e "${YELLOW}  list                     List all applications${NC}"
-        echo -e "${YELLOW}  start <app_name>         Start an application${NC}"
-        echo -e "${YELLOW}  stop <app_name>          Stop an application${NC}"
-        echo -e "${YELLOW}  logs <app_name>          Show application logs${NC}"
-        echo -e "${YELLOW}  self-update              Update the script to the latest version${NC}"
+        echo -e "${RED}Unknown command: $1${NC}"
+        show_usage
         exit 1
         ;;
 esac 
