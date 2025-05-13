@@ -24,6 +24,7 @@ function Show-Usage {
     Write-Host "  -h, --help     Show this help message"
     Write-Host "  -u, --uninstall Remove Docker Compose Manager"
     Write-Host "  -y, --yes      Non-interactive mode, install everything"
+    Write-Host "  --update       Update Docker Compose Manager to the latest version"
 }
 
 # Function to check if running as administrator
@@ -343,9 +344,10 @@ function Show-Menu {
         Write-Host "1. Install Docker Compose Manager only"
         Write-Host "2. Install missing dependencies"
         Write-Host "3. Install everything"
-        Write-Host "4. Exit"
+        Write-Host "4. Update Docker Compose Manager"
+        Write-Host "5. Exit"
         Write-Host "----------------------------------------"
-        $choice = Read-Host "Enter your choice [1-4]"
+        $choice = Read-Host "Enter your choice [1-5]"
 
         switch ($choice) {
             "1" { 
@@ -361,7 +363,11 @@ function Show-Menu {
                 Install-Manager
                 return
             }
-            "4" { 
+            "4" {
+                Install-Manager
+                return
+            }
+            "5" { 
                 Write-Host "Exiting..."
                 exit 0
             }
@@ -384,7 +390,8 @@ function Show-Menu {
 param(
     [switch]$Help,
     [switch]$Uninstall,
-    [switch]$Yes
+    [switch]$Yes,
+    [switch]$Update
 )
 
 if ($Help) {
@@ -393,6 +400,10 @@ if ($Help) {
 }
 elseif ($Uninstall) {
     Uninstall-DockerComposeManager
+    exit 0
+}
+elseif ($Update) {
+    Install-Manager
     exit 0
 }
 elseif ($Yes) {

@@ -31,6 +31,7 @@ show_usage() {
     echo "  -h, --help     Show this help message"
     echo "  -u, --uninstall Remove Docker Compose Manager"
     echo "  -y, --yes      Non-interactive mode, install everything"
+    echo "  --update       Update Docker Compose Manager to the latest version"
 }
 
 # Function to check if running as root
@@ -250,9 +251,10 @@ show_menu() {
         echo "1. Install Docker Compose Manager only"
         echo "2. Install missing dependencies"
         echo "3. Install everything"
-        echo "4. Exit"
+        echo "4. Update Docker Compose Manager"
+        echo "5. Exit"
         echo "----------------------------------------"
-        read -p "Enter your choice [1-4]: " choice
+        read -p "Enter your choice [1-5]: " choice
 
         case $choice in
             1)
@@ -269,6 +271,10 @@ show_menu() {
                 return
                 ;;
             4)
+                install_manager
+                return
+                ;;
+            5)
                 echo "Exiting..."
                 exit 0
                 ;;
@@ -475,6 +481,9 @@ if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
     exit 0
 elif [ "$1" = "-u" ] || [ "$1" = "--uninstall" ]; then
     uninstall
+    exit 0
+elif [ "$1" = "--update" ]; then
+    install_manager
     exit 0
 elif [ "$1" = "-y" ] || [ "$1" = "--yes" ]; then
     # Non-interactive mode
