@@ -62,6 +62,139 @@ download_file() {
     fi
 }
 
+# Function to install Docker on Ubuntu/Debian
+install_docker_ubuntu() {
+    echo -e "${CYAN}Installing Docker on Ubuntu/Debian...${NC}"
+    
+    # Remove old versions
+    apt-get remove -y docker docker-engine docker.io containerd runc || true
+    
+    # Update package index
+    apt-get update
+    
+    # Install prerequisites
+    apt-get install -y \
+        apt-transport-https \
+        ca-certificates \
+        gnupg \
+        lsb-release
+    
+    # Add Docker's official GPG key
+    install -m 0755 -d /etc/apt/keyrings
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    chmod a+r /etc/apt/keyrings/docker.gpg
+    
+    # Set up the repository
+    echo \
+        "deb [arch="$(dpkg --print-architecture)" signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+        "$(. /etc/os-release && echo "$VERSION_CODENAME")" stable" | \
+        tee /etc/apt/sources.list.d/docker.list > /dev/null
+    
+    # Install Docker Engine
+    apt-get update
+    apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    
+    # Start and enable Docker
+    systemctl start docker
+    systemctl enable docker
+    
+    # Add current user to docker group
+    usermod -aG docker $SUDO_USER
+    
+    echo -e "${GREEN}Docker installed successfully${NC}"
+    echo -e "${YELLOW}Please log out and log back in for Docker group changes to take effect${NC}"
+}
+
+# Function to install Docker on CentOS/RHEL
+install_docker_centos() {
+    echo -e "${CYAN}Installing Docker on CentOS/RHEL...${NC}"
+    
+    # Remove old versions
+    yum remove -y docker docker-client docker-client-latest docker-common docker-latest docker-latest-logrotate docker-logrotate docker-engine || true
+    
+    # Install prerequisites
+    yum install -y yum-utils
+    
+    # Add Docker repository
+    yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+    
+    # Install Docker Engine
+    yum install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    
+    # Start and enable Docker
+    systemctl start docker
+    systemctl enable docker
+    
+    # Add current user to docker group
+    usermod -aG docker $SUDO_USER
+    
+    echo -e "${GREEN}Docker installed successfully${NC}"
+    echo -e "${YELLOW}Please log out and log back in for Docker group changes to take effect${NC}"
+}
+
+# Function to install jq
+install_jq() {
+    echo -e "${CYAN}Installing jq...${NC}"
+    
+    case $OS in
+        "Ubuntu"|"Debian GNU/Linux")
+            apt-get update
+            apt-get install -y jq
+            ;;
+        "CentOS Linux"|"Red Hat Enterprise Linux")
+            yum install -y jq
+            ;;
+        *)
+            echo -e "${RED}Error: Unsupported Linux distribution for jq installation${NC}"
+            return 1
+            ;;
+    esac
+    
+    echo -e "${GREEN}jq installed successfully${NC}"
+}
+
+# Function to install curl
+install_curl() {
+    echo -e "${CYAN}Installing curl...${NC}"
+    
+    case $OS in
+        "Ubuntu"|"Debian GNU/Linux")
+            apt-get update
+            apt-get install -y curl
+            ;;
+        "CentOS Linux"|"Red Hat Enterprise Linux")
+            yum install -y curl
+            ;;
+        *)
+            echo -e "${RED}Error: Unsupported Linux distribution for curl installation${NC}"
+            return 1
+            ;;
+    esac
+    
+    echo -e "${GREEN}curl installed successfully${NC}"
+}
+
+# Function to install wget
+install_wget() {
+    echo -e "${CYAN}Installing wget...${NC}"
+    
+    case $OS in
+        "Ubuntu"|"Debian GNU/Linux")
+            apt-get update
+            apt-get install -y wget
+            ;;
+        "CentOS Linux"|"Red Hat Enterprise Linux")
+            yum install -y wget
+            ;;
+        *)
+            echo -e "${RED}Error: Unsupported Linux distribution for wget installation${NC}"
+            return 1
+            ;;
+    esac
+    
+    echo -e "${GREEN}wget installed successfully${NC}"
+}
+
 # Function to check requirements
 check_requirements() {
     local missing=0
@@ -85,11 +218,108 @@ check_requirements() {
     fi
 
     if [ $missing -eq 1 ]; then
-        echo -e "${YELLOW}Please install the missing requirements and re-run the installer.${NC}"
-        echo "Required: docker, docker compose, jq, and either curl or wget."
-        exit 1
+        return 1
     fi
     echo -e "${GREEN}All requirements satisfied.${NC}"
+    return 0
+}
+
+# Function to show interactive menu
+show_menu() {
+    echo -e "${CYAN}Docker Compose Manager Installation${NC}"
+    echo "----------------------------------------"
+    echo "1. Install Docker Compose Manager only"
+    echo "2. Install missing dependencies"
+    echo "3. Install everything"
+    echo "4. Exit"
+    echo "----------------------------------------"
+    read -p "Enter your choice [1-4]: " choice
+
+    case $choice in
+        1)
+            install_manager
+            ;;
+        2)
+            install_dependencies
+            ;;
+        3)
+            install_dependencies
+            install_manager
+            ;;
+        4)
+            echo "Exiting..."
+            exit 0
+            ;;
+        *)
+            echo -e "${RED}Invalid choice${NC}"
+            show_menu
+            ;;
+    esac
+}
+
+# Function to install dependencies
+install_dependencies() {
+    check_root
+    detect_distro
+    
+    echo -e "${CYAN}Installing dependencies...${NC}"
+    
+    # Install Docker if needed
+    if ! command -v docker &> /dev/null; then
+        case $OS in
+            "Ubuntu"|"Debian GNU/Linux")
+                install_docker_ubuntu
+                ;;
+            "CentOS Linux"|"Red Hat Enterprise Linux")
+                install_docker_centos
+                ;;
+            *)
+                echo -e "${RED}Error: Unsupported Linux distribution for Docker installation${NC}"
+                exit 1
+                ;;
+        esac
+    fi
+    
+    # Install jq if needed
+    if ! command -v jq &> /dev/null; then
+        install_jq
+    fi
+    
+    # Install curl or wget if needed
+    if ! command -v curl &> /dev/null && ! command -v wget &> /dev/null; then
+        read -p "Neither curl nor wget is installed. Which would you prefer to install? (curl/wget): " choice
+        case $choice in
+            curl)
+                install_curl
+                ;;
+            wget)
+                install_wget
+                ;;
+            *)
+                echo -e "${RED}Invalid choice${NC}"
+                exit 1
+                ;;
+        esac
+    fi
+}
+
+# Function to install manager
+install_manager() {
+    echo -e "${CYAN}Installing Docker Compose Manager...${NC}"
+    
+    # Download management script
+    echo -e "${CYAN}Downloading management script...${NC}"
+    download_file "https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/manage.sh" "$INSTALL_DIR/dcm"
+    chmod +x "$INSTALL_DIR/dcm"
+    
+    # Create default configuration
+    create_default_config
+    
+    # Create apps directory structure
+    create_apps_directory
+    
+    echo -e "${GREEN}Docker Compose Manager installed successfully${NC}"
+    echo -e "${YELLOW}You can now use the 'dcm' command to manage your Docker Compose applications${NC}"
 }
 
 # Function to create default configuration
@@ -193,28 +423,6 @@ EOF
     echo -e "${GREEN}Apps directory structure created successfully${NC}"
 }
 
-# Function to install Docker Compose Manager
-install() {
-    echo -e "${CYAN}Installing Docker Compose Manager...${NC}"
-
-    # Check requirements
-    check_requirements
-
-    # Download management script
-    echo -e "${CYAN}Downloading management script...${NC}"
-    download_file "https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/manage.sh" "$INSTALL_DIR/dcm"
-    chmod +x "$INSTALL_DIR/dcm"
-
-    # Create default configuration
-    create_default_config
-
-    # Create apps directory structure
-    create_apps_directory
-
-    echo -e "${GREEN}Docker Compose Manager installed successfully${NC}"
-    echo -e "${YELLOW}You can now use the 'dcm' command to manage your Docker Compose applications${NC}"
-}
-
 # Function to uninstall Docker Compose Manager
 uninstall() {
     echo -e "${CYAN}Uninstalling Docker Compose Manager...${NC}"
@@ -231,6 +439,18 @@ uninstall() {
     echo -e "${GREEN}Docker Compose Manager uninstalled successfully${NC}"
     echo -e "${YELLOW}Note: Docker applications in $DEFAULT_APPS_DIR were not removed${NC}"
 }
+
+# Main script logic
+if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+    show_usage
+    exit 0
+elif [ "$1" = "-u" ] || [ "$1" = "--uninstall" ]; then
+    uninstall
+    exit 0
+fi
+
+# Show interactive menu
+show_menu
 
 # Main script logic
 case "$1" in
