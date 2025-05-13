@@ -574,65 +574,37 @@ function Restore-Application {
     Write-Host "Application restored successfully" -ForegroundColor $Green
 }
 
-# Function to self-update the script
-function Update-Self {
-    Write-Host "Checking for updates..." -ForegroundColor $Cyan
+# Function to update the script
+function Update-Script {
+    Write-Host "Checking for updates..." -ForegroundColor $CYAN
     
+    # Get the current script's directory
+    $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+    $scriptPath = Join-Path $scriptDir "dcm.ps1"
+    
+    # Download the latest version
+    $tempFile = [System.IO.Path]::GetTempFileName()
     try {
-        # Get the latest version from GitHub
-        $latestVersion = (Invoke-WebRequest -Uri "https://api.github.com/repos/lpolish/dockercomposemgr/releases/latest" -UseBasicParsing).Content | ConvertFrom-Json | Select-Object -ExpandProperty tag_name
+        Invoke-WebRequest -Uri "https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/manage.ps1" -OutFile $tempFile -UseBasicParsing
         
-        # Get current script path
-        $scriptPath = $MyInvocation.MyCommand.Path
-        if (-not $scriptPath) {
-            Write-Host "Error: Could not determine script location" -ForegroundColor $Red
-            exit 1
-        }
-
-        # Download the latest version
-        Write-Host "Downloading latest version ($latestVersion)..." -ForegroundColor $Cyan
-        $tempFile = Join-Path $env:TEMP ([System.Guid]::NewGuid().ToString() + ".ps1")
+        # Create backup of current script
+        $backupPath = "$scriptPath.bak"
+        Copy-Item -Path $scriptPath -Destination $backupPath -Force
         
-        try {
-            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/manage.ps1" -OutFile $tempFile -UseBasicParsing
-        }
-        catch {
-            Write-Host "Error: Failed to download update" -ForegroundColor $Red
-            if (Test-Path $tempFile) { Remove-Item $tempFile }
-            exit 1
-        }
-
-        # Verify the downloaded script
-        try {
-            $null = Get-Content $tempFile -ErrorAction Stop
-        }
-        catch {
-            Write-Host "Error: Downloaded script is invalid" -ForegroundColor $Red
-            if (Test-Path $tempFile) { Remove-Item $tempFile }
-            exit 1
-        }
-
-        # Backup current script
-        Copy-Item $scriptPath "${scriptPath}.bak"
-
         # Replace current script with new version
-        try {
-            Move-Item -Path $tempFile -Destination $scriptPath -Force
-        }
-        catch {
-            Write-Host "Error: Failed to update script" -ForegroundColor $Red
-            Move-Item -Path "${scriptPath}.bak" -Destination $scriptPath -Force
-            exit 1
-        }
-
-        Write-Host "Successfully updated to version $latestVersion" -ForegroundColor $Green
-        Write-Host "A backup of your previous version was saved as ${scriptPath}.bak"
+        Move-Item -Path $tempFile -Destination $scriptPath -Force
+        
+        Write-Host "Script updated successfully" -ForegroundColor $GREEN
+        Write-Host "A backup of the previous version was created at: $backupPath" -ForegroundColor $YELLOW
     }
     catch {
-        Write-Host "Error: An unexpected error occurred during update" -ForegroundColor $Red
-        Write-Host $_.Exception.Message
-        exit 1
+        Write-Host "Failed to update script: $_" -ForegroundColor $RED
+        if (Test-Path $tempFile) {
+            Remove-Item $tempFile -Force
+        }
+        return $false
     }
+    return $true
 }
 
 # Main script logic
@@ -730,15 +702,20 @@ switch ($args[0]) {
         }
     }
     "add" {
+        if ($args.Count -lt 3) {
+            Write-Host "Error: Missing required arguments" -ForegroundColor $RED
+            Write-Host "Usage: dcm add <app_name> <path>" -ForegroundColor $YELLOW
+            exit 1
+        }
         Add-App $args[1] $args[2]
     }
     "clone" {
         Clone-App $args[1] $args[2]
     }
     "remove" {
-        if (-not $args[1]) {
-            Write-Host "Error: Application name required" -ForegroundColor $Red
-            Write-Host "Usage: dcm remove <app>"
+        if ($args.Count -lt 2) {
+            Write-Host "Error: Missing required arguments" -ForegroundColor $RED
+            Write-Host "Usage: dcm remove <app_name>" -ForegroundColor $YELLOW
             exit 1
         }
         if (Test-Path "$script:AppsDir\$($args[1])") {
@@ -786,7 +763,7 @@ switch ($args[0]) {
         Create-App
     }
     "self-update" {
-        Update-Self
+        Update-Script
     }
     "-h" { Show-Usage }
     "--help" { Show-Usage }

@@ -591,52 +591,35 @@ list_apps() {
 self_update() {
     echo -e "${CYAN}Checking for updates...${NC}"
     
-    # Get the latest version from GitHub
-    local latest_version
-    if ! latest_version=$(curl -s "https://api.github.com/repos/lpolish/dockercomposemgr/releases/latest" | jq -r '.tag_name'); then
-        echo -e "${RED}Error: Failed to check for updates${NC}"
-        exit 1
-    fi
-
-    # Get current script path
-    local script_path
-    script_path=$(readlink -f "$0")
-    if [ -z "$script_path" ]; then
-        script_path="$0"
-    fi
-
+    # Get the current script's directory
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    SCRIPT_PATH="$SCRIPT_DIR/dcm"
+    
     # Download the latest version
-    echo "Downloading latest version ($latest_version)..."
-    local temp_file
-    temp_file=$(mktemp)
-    if ! curl -sL "https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/manage.sh" -o "$temp_file"; then
-        echo -e "${RED}Error: Failed to download update${NC}"
-        rm -f "$temp_file"
-        exit 1
+    TEMP_FILE=$(mktemp)
+    if ! curl -fsSL "https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/manage.sh" -o "$TEMP_FILE"; then
+        echo -e "${RED}Failed to download update${NC}"
+        rm -f "$TEMP_FILE"
+        return 1
     fi
-
-    # Verify the downloaded script
-    if ! bash -n "$temp_file"; then
-        echo -e "${RED}Error: Downloaded script is invalid${NC}"
-        rm -f "$temp_file"
-        exit 1
-    fi
-
-    # Backup current script
-    cp "$script_path" "${script_path}.bak"
-
+    
+    # Create backup of current script
+    BACKUP_PATH="${SCRIPT_PATH}.bak"
+    cp "$SCRIPT_PATH" "$BACKUP_PATH"
+    
     # Replace current script with new version
-    if ! mv "$temp_file" "$script_path"; then
-        echo -e "${RED}Error: Failed to update script${NC}"
-        mv "${script_path}.bak" "$script_path"
-        exit 1
+    if ! mv "$TEMP_FILE" "$SCRIPT_PATH"; then
+        echo -e "${RED}Failed to update script${NC}"
+        mv "$BACKUP_PATH" "$SCRIPT_PATH"
+        return 1
     fi
-
-    # Make the script executable
-    chmod +x "$script_path"
-
-    echo -e "${GREEN}Successfully updated to version $latest_version${NC}"
-    echo "A backup of your previous version was saved as ${script_path}.bak"
+    
+    # Ensure script remains executable
+    chmod +x "$SCRIPT_PATH"
+    
+    echo -e "${GREEN}Script updated successfully${NC}"
+    echo -e "${YELLOW}A backup of the previous version was created at: $BACKUP_PATH${NC}"
+    return 0
 }
 
 # Main script logic
@@ -726,15 +709,20 @@ case "$1" in
         fi
         ;;
     add)
+        if [ $# -lt 3 ]; then
+            echo -e "${RED}Error: Missing required arguments${NC}"
+            echo -e "${YELLOW}Usage: dcm add <app_name> <path>${NC}"
+            exit 1
+        fi
         add_app "$2" "$3"
         ;;
     clone)
         clone_app "$2" "$3"
         ;;
     remove)
-        if [ -z "$2" ]; then
-            echo -e "${RED}Error: Application name required${NC}"
-            echo "Usage: dcm remove <app>"
+        if [ $# -lt 2 ]; then
+            echo -e "${RED}Error: Missing required arguments${NC}"
+            echo -e "${YELLOW}Usage: dcm remove <app_name>${NC}"
             exit 1
         fi
         if [ -d "$APPS_DIR/$2" ]; then
@@ -794,8 +782,16 @@ case "$1" in
         show_usage
         ;;
     *)
-        echo -e "${RED}Error: Unknown command${NC}"
-        show_usage
+        echo -e "${RED}Error: Unknown command '$1'${NC}"
+        echo -e "${YELLOW}Usage: dcm <command> [args]${NC}"
+        echo -e "${YELLOW}Commands:${NC}"
+        echo -e "${YELLOW}  add <app_name> <path>    Add a new application${NC}"
+        echo -e "${YELLOW}  remove <app_name>        Remove an application${NC}"
+        echo -e "${YELLOW}  list                     List all applications${NC}"
+        echo -e "${YELLOW}  start <app_name>         Start an application${NC}"
+        echo -e "${YELLOW}  stop <app_name>          Stop an application${NC}"
+        echo -e "${YELLOW}  logs <app_name>          Show application logs${NC}"
+        echo -e "${YELLOW}  self-update              Update the script to the latest version${NC}"
         exit 1
         ;;
 esac 
