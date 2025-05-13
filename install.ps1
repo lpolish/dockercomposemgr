@@ -298,29 +298,31 @@ function Install-Manager {
     return $true
 }
 
-# Function to uninstall
-function Uninstall-Manager {
+# Function to uninstall Docker Compose Manager
+function Uninstall-DockerComposeManager {
     Write-Host "Uninstalling Docker Compose Manager..." -ForegroundColor $CYAN
     
-    # Remove from PowerShell profile
-    if (Test-Path $PROFILE) {
-        $profileContent = Get-Content $PROFILE -Raw
-        $newContent = $profileContent -replace [regex]::Escape("`$env:Path += `";$INSTALL_DIR`""), ""
-        Set-Content -Path $PROFILE -Value $newContent
+    # Check if running as administrator
+    if (-not (Test-Administrator)) {
+        Write-Host "This operation requires administrator privileges." -ForegroundColor $RED
+        Write-Host "Please run the script as administrator." -ForegroundColor $YELLOW
+        return $false
     }
-    
-    # Remove installation directory
-    if (Test-Path $INSTALL_DIR) {
-        Remove-Item -Path $INSTALL_DIR -Recurse -Force
+
+    # Remove management script
+    $installPath = "$env:ProgramFiles\DockerComposeManager"
+    if (Test-Path $installPath) {
+        Remove-Item -Path $installPath -Recurse -Force
     }
-    
+
     # Remove configuration directory
-    if (Test-Path $CONFIG_DIR) {
-        Remove-Item -Path $CONFIG_DIR -Recurse -Force
+    $configDir = "$env:USERPROFILE\.config\dockercomposemgr"
+    if (Test-Path $configDir) {
+        Remove-Item -Path $configDir -Recurse -Force
     }
-    
-    Write-Host "Docker Compose Manager uninstalled successfully." -ForegroundColor $GREEN
-    Write-Host "Note: Docker applications in $DEFAULT_APPS_DIR were not removed." -ForegroundColor $YELLOW
+
+    Write-Host "Docker Compose Manager uninstalled successfully" -ForegroundColor $GREEN
+    Write-Host "Note: Docker applications in $DEFAULT_APPS_DIR were not removed" -ForegroundColor $YELLOW
 }
 
 # Function to show interactive menu
@@ -390,7 +392,7 @@ if ($Help) {
     exit 0
 }
 elseif ($Uninstall) {
-    Uninstall-Manager
+    Uninstall-DockerComposeManager
     exit 0
 }
 elseif ($Yes) {
