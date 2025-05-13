@@ -624,7 +624,7 @@ self_update() {
 
 # Main script logic
 if [ $# -eq 0 ] || [ -z "$1" ]; then
-    show_menu
+    show_usage
     exit 0
 fi
 
