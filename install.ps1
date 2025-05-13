@@ -12,6 +12,9 @@ $INSTALL_DIR = "$env:USERPROFILE\AppData\Local\DockerComposeManager"
 $CONFIG_DIR = "$env:USERPROFILE\.config\dockercomposemgr"
 $DEFAULT_APPS_DIR = "$env:USERPROFILE\dockerapps"
 
+# Check if running in non-interactive mode
+$INTERACTIVE = [Console]::IsInputRedirected -eq $false
+
 # Function to display usage
 function Show-Usage {
     Write-Host "Docker Compose Manager Installer"
@@ -20,6 +23,7 @@ function Show-Usage {
     Write-Host "Options:"
     Write-Host "  -h, --help     Show this help message"
     Write-Host "  -u, --uninstall Remove Docker Compose Manager"
+    Write-Host "  -y, --yes      Non-interactive mode, install everything"
 }
 
 # Function to check if running as administrator
@@ -321,6 +325,13 @@ function Uninstall-Manager {
 
 # Function to show interactive menu
 function Show-Menu {
+    if (-not $INTERACTIVE) {
+        # Non-interactive mode, install everything
+        Install-Dependencies
+        Install-Manager
+        return
+    }
+
     Write-Host "Docker Compose Manager Installation" -ForegroundColor $CYAN
     Write-Host "----------------------------------------"
     Write-Host "1. Install Docker Compose Manager only"
@@ -328,16 +339,14 @@ function Show-Menu {
     Write-Host "3. Install everything"
     Write-Host "4. Exit"
     Write-Host "----------------------------------------"
-    
     $choice = Read-Host "Enter your choice [1-4]"
-    
+
     switch ($choice) {
         "1" { Install-Manager }
         "2" { Install-Dependencies }
         "3" { 
-            if (Install-Dependencies) {
-                Install-Manager
-            }
+            Install-Dependencies
+            Install-Manager
         }
         "4" { 
             Write-Host "Exiting..."
@@ -351,12 +360,25 @@ function Show-Menu {
 }
 
 # Main script logic
-if ($args[0] -eq "-h" -or $args[0] -eq "--help") {
+param(
+    [switch]$Help,
+    [switch]$Uninstall,
+    [switch]$Yes
+)
+
+if ($Help) {
     Show-Usage
     exit 0
 }
-elseif ($args[0] -eq "-u" -or $args[0] -eq "--uninstall") {
+elseif ($Uninstall) {
     Uninstall-Manager
+    exit 0
+}
+elseif ($Yes) {
+    # Non-interactive mode
+    $INTERACTIVE = $false
+    Install-Dependencies
+    Install-Manager
     exit 0
 }
 

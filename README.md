@@ -184,7 +184,7 @@ You can install the tool with a single command using either curl or wget:
 
 Using curl (recommended, comes pre-installed on most systems):
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/install.sh | bash -s -- -y
 ```
 
 Or using wget (if you prefer, may need to be installed first):
@@ -193,7 +193,7 @@ Or using wget (if you prefer, may need to be installed first):
 sudo apt-get update && sudo apt-get install -y wget
 
 # Then run the installation
-wget -qO- https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/install.sh | bash
+wget -qO- https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/install.sh | bash -s -- -y
 ```
 
 Or if you prefer to download and run the script manually:
@@ -202,14 +202,14 @@ Using curl:
 ```bash
 curl -fsSL https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/install.sh -o install.sh
 chmod +x install.sh
-./install.sh
+./install.sh -y
 ```
 
 Using wget:
 ```bash
 wget https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/install.sh
 chmod +x install.sh
-./install.sh
+./install.sh -y
 ```
 
 ### Windows
@@ -217,7 +217,7 @@ You can install the tool using PowerShell:
 
 ```powershell
 # Run in PowerShell as Administrator
-Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/install.ps1'))
+Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/install.ps1')) -Yes
 ```
 
 Or if you prefer to download and run the script manually:
@@ -226,7 +226,7 @@ Or if you prefer to download and run the script manually:
 # Run in PowerShell as Administrator
 Invoke-WebRequest -Uri "https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/install.ps1" -OutFile "install.ps1"
 Set-ExecutionPolicy Bypass -Scope Process -Force
-.\install.ps1
+.\install.ps1 -Yes
 ```
 
 ## Manual Installation

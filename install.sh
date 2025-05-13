@@ -15,6 +15,13 @@ INSTALL_DIR="/usr/local/bin"
 CONFIG_DIR="$HOME/.config/dockercomposemgr"
 DEFAULT_APPS_DIR="$HOME/dockerapps"
 
+# Check if running in non-interactive mode
+if [ -t 0 ]; then
+    INTERACTIVE=1
+else
+    INTERACTIVE=0
+fi
+
 # Function to display usage
 show_usage() {
     echo "Docker Compose Manager Installer"
@@ -23,6 +30,7 @@ show_usage() {
     echo "Options:"
     echo "  -h, --help     Show this help message"
     echo "  -u, --uninstall Remove Docker Compose Manager"
+    echo "  -y, --yes      Non-interactive mode, install everything"
 }
 
 # Function to check if running as root
@@ -226,6 +234,13 @@ check_requirements() {
 
 # Function to show interactive menu
 show_menu() {
+    if [ $INTERACTIVE -eq 0 ]; then
+        # Non-interactive mode, install everything
+        install_dependencies
+        install_manager
+        return
+    fi
+
     echo -e "${CYAN}Docker Compose Manager Installation${NC}"
     echo "----------------------------------------"
     echo "1. Install Docker Compose Manager only"
@@ -446,6 +461,12 @@ if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
     exit 0
 elif [ "$1" = "-u" ] || [ "$1" = "--uninstall" ]; then
     uninstall
+    exit 0
+elif [ "$1" = "-y" ] || [ "$1" = "--yes" ]; then
+    # Non-interactive mode
+    INTERACTIVE=0
+    install_dependencies
+    install_manager
     exit 0
 fi
 
