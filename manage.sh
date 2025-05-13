@@ -606,12 +606,34 @@ self_update() {
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     SCRIPT_PATH="$SCRIPT_DIR/dcm"
     
-    # Download the latest version
+    # Calculate current script's checksum
+    CURRENT_CHECKSUM=$(sha256sum "$SCRIPT_PATH" 2>/dev/null | cut -d' ' -f1)
+    if [ -z "$CURRENT_CHECKSUM" ]; then
+        echo -e "${RED}Error: Could not calculate current script checksum${NC}"
+        return 1
+    fi
+    
+    # Download the latest version to a temporary file
     TEMP_FILE=$(mktemp)
     if ! curl -fsSL "https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/manage.sh" -o "$TEMP_FILE"; then
         echo -e "${RED}Failed to download update${NC}"
         rm -f "$TEMP_FILE"
         return 1
+    fi
+    
+    # Calculate new script's checksum
+    NEW_CHECKSUM=$(sha256sum "$TEMP_FILE" 2>/dev/null | cut -d' ' -f1)
+    if [ -z "$NEW_CHECKSUM" ]; then
+        echo -e "${RED}Error: Could not calculate new script checksum${NC}"
+        rm -f "$TEMP_FILE"
+        return 1
+    fi
+    
+    # Compare checksums
+    if [ "$CURRENT_CHECKSUM" = "$NEW_CHECKSUM" ]; then
+        echo -e "${GREEN}Already running the latest version${NC}"
+        rm -f "$TEMP_FILE"
+        return 0
     fi
     
     # Create backup of current script
