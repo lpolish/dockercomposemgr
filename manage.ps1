@@ -65,6 +65,9 @@ function Add-App {
         exit 1
     }
 
+    # Remove trailing slash from app_path if present
+    $AppPath = $AppPath.TrimEnd('\')
+
     if (-not (Test-Path "$AppPath\docker-compose.yml")) {
         Write-Host "Error: docker-compose.yml not found in specified path" -ForegroundColor $Red
         exit 1
@@ -74,15 +77,34 @@ function Add-App {
     New-Item -ItemType Directory -Force -Path "$script:AppsDir\$AppName" | Out-Null
 
     # Store application path in config
-    $config = Get-Content $AppsFile | ConvertFrom-Json
-    $config.apps | Add-Member -NotePropertyName $AppName -NotePropertyValue @{
-        path = $AppPath
+    $config = @{}
+    if (Test-Path $AppsFile) {
+        $config = Get-Content $AppsFile | ConvertFrom-Json
+    } else {
+        $config = @{
+            "version" = "1.0.0"
+            "apps" = @{}
+            "last_updated" = $null
+        }
     }
+
+    # Update the config with the new app
+    if (-not $config.apps) {
+        $config | Add-Member -NotePropertyName "apps" -NotePropertyValue @{}
+    }
+    $config.apps | Add-Member -NotePropertyName $AppName -NotePropertyValue @{
+        "path" = $AppPath
+    }
+    $config.last_updated = (Get-Date).ToString("o")
     $config | ConvertTo-Json | Set-Content $AppsFile
 
-    # Copy README.md if it exists
-    if (Test-Path "$AppPath\README.md") {
-        Copy-Item "$AppPath\README.md" "$script:AppsDir\$AppName\"
+    # Create symbolic links
+    $dockerComposePath = (Resolve-Path "$AppPath\docker-compose.yml").Path
+    New-Item -ItemType SymbolicLink -Force -Path "$script:AppsDir\$AppName\docker-compose.yml" -Target $dockerComposePath | Out-Null
+    
+    if (Test-Path "$AppPath\.env") {
+        $envPath = (Resolve-Path "$AppPath\.env").Path
+        New-Item -ItemType SymbolicLink -Force -Path "$script:AppsDir\$AppName\.env" -Target $envPath | Out-Null
     }
 
     Write-Host "Application '$AppName' added successfully" -ForegroundColor $Green
