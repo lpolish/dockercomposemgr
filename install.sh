@@ -62,92 +62,34 @@ download_file() {
     fi
 }
 
-# Function to install Docker
-install_docker() {
-    # Check if we're in a container
-    if [ -f /.dockerenv ] || [ -f /run/.containerenv ]; then
-        echo -e "${YELLOW}Skipping Docker installation in container${NC}"
-        return 0
+# Function to check requirements
+check_requirements() {
+    local missing=0
+    echo -e "${CYAN}Checking requirements...${NC}"
+
+    if ! command -v docker &> /dev/null; then
+        echo -e "${RED}Docker is not installed.${NC}"
+        missing=1
+    fi
+    if ! docker compose version &> /dev/null; then
+        echo -e "${RED}Docker Compose is not available (docker compose plugin missing).${NC}"
+        missing=1
+    fi
+    if ! command -v jq &> /dev/null; then
+        echo -e "${RED}jq is not installed.${NC}"
+        missing=1
+    fi
+    if ! command -v curl &> /dev/null && ! command -v wget &> /dev/null; then
+        echo -e "${RED}Neither curl nor wget is installed.${NC}"
+        missing=1
     fi
 
-    echo -e "${CYAN}Installing Docker...${NC}"
-    
-    case $OS in
-        "Ubuntu"|"Debian GNU/Linux")
-            # Remove old versions
-            apt-get remove -y docker docker-engine docker.io containerd runc || true
-            
-            # Update package index
-            apt-get update
-            
-            # Install prerequisites
-            apt-get install -y \
-                apt-transport-https \
-                ca-certificates \
-                gnupg \
-                lsb-release \
-                jq
-            
-            # Add Docker's official GPG key
-            download_file "https://download.docker.com/linux/ubuntu/gpg" "/usr/share/keyrings/docker-archive-keyring.gpg"
-            gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg /usr/share/keyrings/docker-archive-keyring.gpg
-            
-            # Set up the stable repository
-            echo \
-                "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \
-                $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
-            
-            # Install Docker Engine
-            apt-get update
-            apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-            
-            # On host system, use systemd
-            systemctl start docker || true
-            # Add current user to docker group
-            usermod -aG docker $SUDO_USER
-            ;;
-            
-        "CentOS Linux"|"Red Hat Enterprise Linux")
-            # Remove old versions
-            yum remove -y docker docker-client docker-client-latest docker-common docker-latest docker-latest-logrotate docker-logrotate docker-engine || true
-            
-            # Install prerequisites
-            yum install -y yum-utils jq
-            
-            # Add Docker repository
-            yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
-            
-            # Install Docker Engine
-            yum install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-            
-            # On host system, use systemd
-            systemctl start docker || true
-            systemctl enable docker || true
-            # Add current user to docker group
-            usermod -aG docker $SUDO_USER
-            ;;
-            
-        *)
-            echo -e "${RED}Error: Unsupported Linux distribution${NC}"
-            exit 1
-            ;;
-    esac
-    
-    # Verify Docker installation
-    local retries=5
-    local count=0
-    while [ $count -lt $retries ]; do
-        if docker info &> /dev/null; then
-            echo -e "${GREEN}Docker installed successfully${NC}"
-            return 0
-        fi
-        count=$((count + 1))
-        sleep 2
-    done
-    
-    echo -e "${RED}Error: Docker installation failed${NC}"
-    echo "Please check the installation logs for more information"
-    exit 1
+    if [ $missing -eq 1 ]; then
+        echo -e "${YELLOW}Please install the missing requirements and re-run the installer.${NC}"
+        echo "Required: docker, docker compose, jq, and either curl or wget."
+        exit 1
+    fi
+    echo -e "${GREEN}All requirements satisfied.${NC}"
 }
 
 # Function to create default configuration
@@ -254,30 +196,22 @@ EOF
 # Function to install Docker Compose Manager
 install() {
     echo -e "${CYAN}Installing Docker Compose Manager...${NC}"
-    
-    # Check if running as root
-    check_root
-    
-    # Detect Linux distribution
-    detect_distro
-    
-    # Install Docker and dependencies only if not in container
-    echo -e "${CYAN}Installing Docker...${NC}"
-    install_docker
-    
+
+    # Check requirements
+    check_requirements
+
     # Download management script
     echo -e "${CYAN}Downloading management script...${NC}"
     download_file "https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/manage.sh" "$INSTALL_DIR/dcm"
     chmod +x "$INSTALL_DIR/dcm"
-    
+
     # Create default configuration
     create_default_config
-    
+
     # Create apps directory structure
     create_apps_directory
-    
+
     echo -e "${GREEN}Docker Compose Manager installed successfully${NC}"
-    echo -e "${YELLOW}Please log out and log back in for Docker group changes to take effect${NC}"
     echo -e "${YELLOW}You can now use the 'dcm' command to manage your Docker Compose applications${NC}"
 }
 
