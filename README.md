@@ -51,8 +51,7 @@ The `apps.json` file stores the configuration for all managed applications in th
 When adding a new application, the system will:
 1. Create a directory for the application in `~/dockerapps/`
 2. Store the original path in `apps.json`
-3. Copy any README.md file if it exists
-4. Use the original docker-compose.yml file directly from the source path
+3. Use the original docker-compose.yml file directly from the source path
 
 Example:
 ```bash
@@ -65,8 +64,7 @@ When cloning a repository, the system will:
 1. Clone the repository to a temporary directory
 2. Create a directory for the application in `~/dockerapps/`
 3. Store the cloned repository path in `apps.json`
-4. Copy any README.md file if it exists
-5. Use the docker-compose.yml file directly from the cloned repository
+4. Use the docker-compose.yml file directly from the cloned repository
 
 Example:
 ```bash
@@ -78,7 +76,7 @@ dcm clone https://github.com/user/repo.git myapp
 1. **Application Organization**
    - Keep original docker-compose files in their source locations
    - Use the manager to reference and manage these applications
-   - Store application-specific documentation in the application directory
+   - Store application-specific documentation in the original application directory
 
 2. **Configuration**
    - Use environment variables in .env files for configuration
@@ -91,7 +89,7 @@ dcm clone https://github.com/user/repo.git myapp
    - Use the backup/restore commands for application data
 
 4. **Documentation**
-   - Include a README.md in each application directory
+   - Include a README.md in your original application directory
    - Document any special configuration requirements
    - Keep track of application dependencies
 

@@ -125,11 +125,6 @@ add_app() {
     config=$(echo "$config" | jq --arg app "$app_name" --arg path "$app_path" '.apps[$app] = {"path": $path}')
     echo "$config" > "$APPS_FILE"
 
-    # Copy README.md if it exists
-    if [ -f "$app_path/README.md" ]; then
-        cp "$app_path/README.md" "$APPS_DIR/$app_name/"
-    fi
-
     echo -e "${GREEN}Application '$app_name' added successfully${NC}"
 }
 
