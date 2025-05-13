@@ -655,6 +655,173 @@ self_update() {
     return 0
 }
 
+# Function to remove application
+remove_app() {
+    local app=$1
+    
+    if [ -z "$app" ]; then
+        echo -e "${RED}Error: Application name required${NC}"
+        echo "Usage: dcm remove <app>"
+        exit 1
+    fi
+
+    # Check if app exists
+    if ! jq -e --arg app "$app" '.apps[$app]' "$APPS_FILE" > /dev/null; then
+        echo -e "${RED}Error: Application '$app' not found${NC}"
+        exit 1
+    fi
+
+    # Stop the application if it's running
+    if docker compose -f "$APPS_DIR/$app/docker-compose.yml" ps -q | grep -q .; then
+        echo "Stopping application..."
+        docker compose -f "$APPS_DIR/$app/docker-compose.yml" down
+    fi
+
+    # Remove from config
+    local config=$(cat "$APPS_FILE")
+    config=$(echo "$config" | jq --arg app "$app" 'del(.apps[$app])')
+    echo "$config" > "$APPS_FILE"
+
+    # Remove application directory
+    rm -rf "$APPS_DIR/$app"
+
+    echo -e "${GREEN}Application '$app' removed successfully${NC}"
+}
+
+# Function to start application
+start_app() {
+    local app=$1
+    
+    if [ -z "$app" ]; then
+        echo -e "${RED}Error: Application name required${NC}"
+        echo "Usage: dcm start <app>"
+        exit 1
+    fi
+
+    app_path=$(get_app_path "$app")
+    if [ -z "$app_path" ]; then
+        echo -e "${RED}Error: Application '$app' not found${NC}"
+        exit 1
+    fi
+
+    echo "Starting $app..."
+    if docker compose -f "$app_path/docker-compose.yml" up -d; then
+        echo -e "${GREEN}Application '$app' started successfully${NC}"
+    else
+        echo -e "${RED}Error: Failed to start application${NC}"
+        exit 1
+    fi
+}
+
+# Function to stop application
+stop_app() {
+    local app=$1
+    
+    if [ -z "$app" ]; then
+        echo -e "${RED}Error: Application name required${NC}"
+        echo "Usage: dcm stop <app>"
+        exit 1
+    fi
+
+    app_path=$(get_app_path "$app")
+    if [ -z "$app_path" ]; then
+        echo -e "${RED}Error: Application '$app' not found${NC}"
+        exit 1
+    fi
+
+    echo "Stopping $app..."
+    if docker compose -f "$app_path/docker-compose.yml" down; then
+        echo -e "${GREEN}Application '$app' stopped successfully${NC}"
+    else
+        echo -e "${RED}Error: Failed to stop application${NC}"
+        exit 1
+    fi
+}
+
+# Function to restart application
+restart_app() {
+    local app=$1
+    
+    if [ -z "$app" ]; then
+        echo -e "${RED}Error: Application name required${NC}"
+        echo "Usage: dcm restart <app>"
+        exit 1
+    fi
+
+    app_path=$(get_app_path "$app")
+    if [ -z "$app_path" ]; then
+        echo -e "${RED}Error: Application '$app' not found${NC}"
+        exit 1
+    fi
+
+    echo "Restarting $app..."
+    if docker compose -f "$app_path/docker-compose.yml" restart; then
+        echo -e "${GREEN}Application '$app' restarted successfully${NC}"
+    else
+        echo -e "${RED}Error: Failed to restart application${NC}"
+        exit 1
+    fi
+}
+
+# Function to show application logs
+show_logs() {
+    local app=$1
+    
+    if [ -z "$app" ]; then
+        echo -e "${RED}Error: Application name required${NC}"
+        echo "Usage: dcm logs <app>"
+        exit 1
+    fi
+
+    app_path=$(get_app_path "$app")
+    if [ -z "$app_path" ]; then
+        echo -e "${RED}Error: Application '$app' not found${NC}"
+        exit 1
+    fi
+
+    echo "Showing logs for $app..."
+    docker compose -f "$app_path/docker-compose.yml" logs -f
+}
+
+# Function to update application
+update_app() {
+    local app=$1
+    
+    if [ -z "$app" ]; then
+        echo -e "${RED}Error: Application name required${NC}"
+        echo "Usage: dcm update <app>"
+        exit 1
+    fi
+
+    app_path=$(get_app_path "$app")
+    if [ -z "$app_path" ]; then
+        echo -e "${RED}Error: Application '$app' not found${NC}"
+        exit 1
+    fi
+
+    echo "Updating $app..."
+    
+    # Pull latest images
+    if ! docker compose -f "$app_path/docker-compose.yml" pull; then
+        echo -e "${RED}Error: Failed to pull latest images${NC}"
+        exit 1
+    fi
+
+    # Stop the application
+    if ! docker compose -f "$app_path/docker-compose.yml" down; then
+        echo -e "${RED}Error: Failed to stop application${NC}"
+        exit 1
+    fi
+
+    # Start the application with new images
+    if ! docker compose -f "$app_path/docker-compose.yml" up -d; then
+        echo -e "${RED}Error: Failed to start application with new images${NC}"
+        exit 1
+    fi
+
+    echo -e "${GREEN}Application '$app' updated successfully${NC}"
+}
+
 # Main script logic
 if [ $# -eq 0 ] || [ -z "$1" ]; then
     show_usage
@@ -729,8 +896,42 @@ case "$1" in
         fi
         restore_app "$2" "$3"
         ;;
+    "update")
+        if [ -z "$2" ]; then
+            echo -e "${RED}Error: Application name is required${NC}"
+            echo "Usage: dcm update <app_name>"
+            exit 1
+        fi
+        update_app "$2"
+        ;;
+    "status")
+        if [ -z "$2" ]; then
+            get_status
+        else
+            get_status "$2"
+        fi
+        ;;
+    "info")
+        if [ -z "$2" ]; then
+            echo -e "${RED}Error: Application name is required${NC}"
+            echo "Usage: dcm info <app_name>"
+            exit 1
+        fi
+        get_app_info "$2"
+        ;;
+    "clone")
+        if [ -z "$2" ] || [ -z "$3" ]; then
+            echo -e "${RED}Error: Repository URL and application name are required${NC}"
+            echo "Usage: dcm clone <repo_url> <app_name>"
+            exit 1
+        fi
+        clone_app "$2" "$3"
+        ;;
     "self-update")
         self_update
+        ;;
+    "help"|"-h"|"--help")
+        show_usage
         ;;
     *)
         echo -e "${RED}Unknown command: $1${NC}"
