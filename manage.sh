@@ -133,10 +133,10 @@ add_app() {
     config=$(echo "$config" | jq --arg app "$app_name" --arg path "$app_path" '.apps[$app] = {"path": $path}')
     echo "$config" > "$APPS_FILE"
 
-    # Create symbolic links
-    ln -sf "$app_path/docker-compose.yml" "$APPS_DIR/$app_name/docker-compose.yml"
+    # Create symbolic links with normalized paths
+    ln -sf "$(realpath "$app_path/docker-compose.yml")" "$APPS_DIR/$app_name/docker-compose.yml"
     if [ -f "$app_path/.env" ]; then
-        ln -sf "$app_path/.env" "$APPS_DIR/$app_name/.env"
+        ln -sf "$(realpath "$app_path/.env")" "$APPS_DIR/$app_name/.env"
     fi
 
     echo -e "${GREEN}Application '$app_name' added successfully${NC}"
@@ -731,8 +731,16 @@ case "$1" in
             exit 1
         fi
         if [ -d "$APPS_DIR/$2" ]; then
+            # Ask for confirmation
+            read -p "Are you sure you want to remove application '$2'? [y/N] " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                echo "Operation cancelled"
+                exit 0
+            fi
+
             # Remove from config
-            local config=$(cat "$APPS_FILE")
+            config=$(cat "$APPS_FILE")
             config=$(echo "$config" | jq --arg app "$2" 'del(.apps[$app])')
             echo "$config" > "$APPS_FILE"
             # Remove directory
