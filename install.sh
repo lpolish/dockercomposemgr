@@ -241,35 +241,49 @@ show_menu() {
         return
     fi
 
-    echo -e "${CYAN}Docker Compose Manager Installation${NC}"
-    echo "----------------------------------------"
-    echo "1. Install Docker Compose Manager only"
-    echo "2. Install missing dependencies"
-    echo "3. Install everything"
-    echo "4. Exit"
-    echo "----------------------------------------"
-    read -p "Enter your choice [1-4]: " choice
+    local max_retries=3
+    local retry_count=0
 
-    case $choice in
-        1)
-            install_manager
-            ;;
-        2)
-            install_dependencies
-            ;;
-        3)
-            install_dependencies
-            install_manager
-            ;;
-        4)
-            echo "Exiting..."
-            exit 0
-            ;;
-        *)
-            echo -e "${RED}Invalid choice${NC}"
-            show_menu
-            ;;
-    esac
+    while [ $retry_count -lt $max_retries ]; do
+        echo -e "${CYAN}Docker Compose Manager Installation${NC}"
+        echo "----------------------------------------"
+        echo "1. Install Docker Compose Manager only"
+        echo "2. Install missing dependencies"
+        echo "3. Install everything"
+        echo "4. Exit"
+        echo "----------------------------------------"
+        read -p "Enter your choice [1-4]: " choice
+
+        case $choice in
+            1)
+                install_manager
+                return
+                ;;
+            2)
+                install_dependencies
+                return
+                ;;
+            3)
+                install_dependencies
+                install_manager
+                return
+                ;;
+            4)
+                echo "Exiting..."
+                exit 0
+                ;;
+            *)
+                retry_count=$((retry_count + 1))
+                if [ $retry_count -lt $max_retries ]; then
+                    echo -e "${RED}Invalid choice. Please try again.${NC}"
+                    echo -e "${YELLOW}Attempts remaining: $((max_retries - retry_count))${NC}"
+                else
+                    echo -e "${RED}Too many invalid choices. Exiting...${NC}"
+                    exit 1
+                fi
+                ;;
+        esac
+    done
 }
 
 # Function to install dependencies
@@ -471,17 +485,4 @@ elif [ "$1" = "-y" ] || [ "$1" = "--yes" ]; then
 fi
 
 # Show interactive menu
-show_menu
-
-# Main script logic
-case "$1" in
-    -h|--help)
-        show_usage
-        ;;
-    -u|--uninstall)
-        uninstall
-        ;;
-    *)
-        install
-        ;;
-esac 
+show_menu 

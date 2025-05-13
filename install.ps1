@@ -332,29 +332,48 @@ function Show-Menu {
         return
     }
 
-    Write-Host "Docker Compose Manager Installation" -ForegroundColor $CYAN
-    Write-Host "----------------------------------------"
-    Write-Host "1. Install Docker Compose Manager only"
-    Write-Host "2. Install missing dependencies"
-    Write-Host "3. Install everything"
-    Write-Host "4. Exit"
-    Write-Host "----------------------------------------"
-    $choice = Read-Host "Enter your choice [1-4]"
+    $maxRetries = 3
+    $retryCount = 0
 
-    switch ($choice) {
-        "1" { Install-Manager }
-        "2" { Install-Dependencies }
-        "3" { 
-            Install-Dependencies
-            Install-Manager
-        }
-        "4" { 
-            Write-Host "Exiting..."
-            exit 0
-        }
-        default {
-            Write-Host "Invalid choice" -ForegroundColor $RED
-            Show-Menu
+    while ($retryCount -lt $maxRetries) {
+        Write-Host "Docker Compose Manager Installation" -ForegroundColor $CYAN
+        Write-Host "----------------------------------------"
+        Write-Host "1. Install Docker Compose Manager only"
+        Write-Host "2. Install missing dependencies"
+        Write-Host "3. Install everything"
+        Write-Host "4. Exit"
+        Write-Host "----------------------------------------"
+        $choice = Read-Host "Enter your choice [1-4]"
+
+        switch ($choice) {
+            "1" { 
+                Install-Manager
+                return
+            }
+            "2" { 
+                Install-Dependencies
+                return
+            }
+            "3" { 
+                Install-Dependencies
+                Install-Manager
+                return
+            }
+            "4" { 
+                Write-Host "Exiting..."
+                exit 0
+            }
+            default {
+                $retryCount++
+                if ($retryCount -lt $maxRetries) {
+                    Write-Host "Invalid choice. Please try again." -ForegroundColor $RED
+                    Write-Host "Attempts remaining: $($maxRetries - $retryCount)" -ForegroundColor $YELLOW
+                }
+                else {
+                    Write-Host "Too many invalid choices. Exiting..." -ForegroundColor $RED
+                    exit 1
+                }
+            }
         }
     }
 }
