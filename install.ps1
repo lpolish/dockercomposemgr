@@ -414,5 +414,5 @@ elseif ($Yes) {
     exit 0
 }
 
-# Show interactive menu
+# Show interactive menu by default
 Show-Menu 

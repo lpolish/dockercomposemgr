@@ -493,5 +493,5 @@ elif [ "$1" = "-y" ] || [ "$1" = "--yes" ]; then
     exit 0
 fi
 
-# Show interactive menu
+# Show interactive menu by default
 show_menu 
