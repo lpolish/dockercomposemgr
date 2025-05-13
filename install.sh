@@ -465,14 +465,41 @@ uninstall() {
     # Check if running as root
     check_root
     
+    # Confirm uninstallation
+    if [ $INTERACTIVE -eq 1 ]; then
+        read -p "Are you sure you want to uninstall Docker Compose Manager? [y/N]: " confirm
+        if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+            echo "Uninstallation cancelled"
+            exit 0
+        fi
+    fi
+    
+    # Stop any running applications
+    echo "Stopping any running applications..."
+    if [ -f "$APPS_FILE" ]; then
+        for app in $(jq -r '.apps | keys[]' "$APPS_FILE" 2>/dev/null); do
+            if [ -f "$APPS_DIR/$app/docker-compose.yml" ]; then
+                docker compose -f "$APPS_DIR/$app/docker-compose.yml" down
+            fi
+        done
+    fi
+    
     # Remove management script
+    echo "Removing management script..."
     rm -f "$INSTALL_DIR/dcm"
     
     # Remove configuration directory
+    echo "Removing configuration directory..."
     rm -rf "$CONFIG_DIR"
+    
+    # Remove from PATH if it exists
+    if [ -f "/etc/profile.d/dcm.sh" ]; then
+        rm -f "/etc/profile.d/dcm.sh"
+    fi
     
     echo -e "${GREEN}Docker Compose Manager uninstalled successfully${NC}"
     echo -e "${YELLOW}Note: Docker applications in $DEFAULT_APPS_DIR were not removed${NC}"
+    echo -e "${YELLOW}To remove applications, please delete the directory manually: $DEFAULT_APPS_DIR${NC}"
 }
 
 # Main script logic

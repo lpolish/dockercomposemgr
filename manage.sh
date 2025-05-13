@@ -125,7 +125,7 @@ add_app() {
         exit 1
     fi
 
-    # Ensure config directory exists
+    # Ensure config directory exists with proper permissions
     mkdir -p "$CONFIG_DIR"
     chmod 755 "$CONFIG_DIR"
 
@@ -149,6 +149,12 @@ add_app() {
     ln -sf "$(realpath "$app_path/docker-compose.yml")" "$APPS_DIR/$app_name/docker-compose.yml"
     if [ -f "$app_path/.env" ]; then
         ln -sf "$(realpath "$app_path/.env")" "$APPS_DIR/$app_name/.env"
+    fi
+
+    # Verify the app was added correctly
+    if ! jq -e --arg app "$app_name" '.apps[$app]' "$APPS_FILE" > /dev/null; then
+        echo -e "${RED}Error: Failed to add application to configuration${NC}"
+        exit 1
     fi
 
     echo -e "${GREEN}Application '$app_name' added successfully${NC}"
