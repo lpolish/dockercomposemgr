@@ -12,6 +12,7 @@ $Red = [System.ConsoleColor]::Red
 $Green = [System.ConsoleColor]::Green
 $Yellow = [System.ConsoleColor]::Yellow
 $Blue = [System.ConsoleColor]::Blue
+$Cyan = [System.ConsoleColor]::Cyan
 
 # Function to load configuration
 function Load-Config {
@@ -185,6 +186,7 @@ function Show-Usage {
     Write-Host "  restore <app> <backup> Restore application from backup"
     Write-Host "  create                 Create a new application from template"
     Write-Host "  clone <repo_url> <app_name> Clone a repository and add it as an application"
+    Write-Host "  self-update            Update the script to the latest version"
     Write-Host ""
     Write-Host "Options:"
     Write-Host "  -h, --help             Show this help message"
@@ -550,6 +552,67 @@ function Restore-Application {
     Write-Host "Application restored successfully" -ForegroundColor $Green
 }
 
+# Function to self-update the script
+function Update-Self {
+    Write-Host "Checking for updates..." -ForegroundColor $Cyan
+    
+    try {
+        # Get the latest version from GitHub
+        $latestVersion = (Invoke-WebRequest -Uri "https://api.github.com/repos/lpolish/dockercomposemgr/releases/latest" -UseBasicParsing).Content | ConvertFrom-Json | Select-Object -ExpandProperty tag_name
+        
+        # Get current script path
+        $scriptPath = $MyInvocation.MyCommand.Path
+        if (-not $scriptPath) {
+            Write-Host "Error: Could not determine script location" -ForegroundColor $Red
+            exit 1
+        }
+
+        # Download the latest version
+        Write-Host "Downloading latest version ($latestVersion)..." -ForegroundColor $Cyan
+        $tempFile = Join-Path $env:TEMP ([System.Guid]::NewGuid().ToString() + ".ps1")
+        
+        try {
+            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/manage.ps1" -OutFile $tempFile -UseBasicParsing
+        }
+        catch {
+            Write-Host "Error: Failed to download update" -ForegroundColor $Red
+            if (Test-Path $tempFile) { Remove-Item $tempFile }
+            exit 1
+        }
+
+        # Verify the downloaded script
+        try {
+            $null = Get-Content $tempFile -ErrorAction Stop
+        }
+        catch {
+            Write-Host "Error: Downloaded script is invalid" -ForegroundColor $Red
+            if (Test-Path $tempFile) { Remove-Item $tempFile }
+            exit 1
+        }
+
+        # Backup current script
+        Copy-Item $scriptPath "${scriptPath}.bak"
+
+        # Replace current script with new version
+        try {
+            Move-Item -Path $tempFile -Destination $scriptPath -Force
+        }
+        catch {
+            Write-Host "Error: Failed to update script" -ForegroundColor $Red
+            Move-Item -Path "${scriptPath}.bak" -Destination $scriptPath -Force
+            exit 1
+        }
+
+        Write-Host "Successfully updated to version $latestVersion" -ForegroundColor $Green
+        Write-Host "A backup of your previous version was saved as ${scriptPath}.bak"
+    }
+    catch {
+        Write-Host "Error: An unexpected error occurred during update" -ForegroundColor $Red
+        Write-Host $_.Exception.Message
+        exit 1
+    }
+}
+
 # Main script logic
 Test-Docker
 Load-Config
@@ -570,7 +633,7 @@ switch ($args[0]) {
             foreach ($app in $apps) {
                 $appPath = Get-AppPath $app.Name
                 if ($appPath) {
-                    Write-Host "Starting $($app.Name)..."
+                    Write-Host "Starting $($app.Name)..." -ForegroundColor $Cyan
                     docker compose -f "$appPath\docker-compose.yml" up -d
                 }
             }
@@ -699,6 +762,9 @@ switch ($args[0]) {
     }
     "create" {
         Create-App
+    }
+    "self-update" {
+        Update-Self
     }
     "-h" { Show-Usage }
     "--help" { Show-Usage }

@@ -87,7 +87,12 @@ load_config() {
     # Load apps configuration
     if [ ! -f "$APPS_FILE" ]; then
         echo "{}" > "$APPS_FILE"
+        chmod 644 "$APPS_FILE"
     fi
+
+    # Ensure proper permissions
+    chmod 644 "$CONFIG_FILE"
+    chmod 644 "$APPS_FILE"
 }
 
 # Function to get application path
@@ -112,6 +117,9 @@ add_app() {
         exit 1
     fi
 
+    # Remove trailing slash from app_path if present
+    app_path="${app_path%/}"
+
     if [ ! -f "$app_path/docker-compose.yml" ]; then
         echo -e "${RED}Error: docker-compose.yml not found in specified path${NC}"
         exit 1
@@ -124,6 +132,12 @@ add_app() {
     local config=$(cat "$APPS_FILE")
     config=$(echo "$config" | jq --arg app "$app_name" --arg path "$app_path" '.apps[$app] = {"path": $path}')
     echo "$config" > "$APPS_FILE"
+
+    # Create symbolic links
+    ln -sf "$app_path/docker-compose.yml" "$APPS_DIR/$app_name/docker-compose.yml"
+    if [ -f "$app_path/.env" ]; then
+        ln -sf "$app_path/.env" "$APPS_DIR/$app_name/.env"
+    fi
 
     echo -e "${GREEN}Application '$app_name' added successfully${NC}"
 }
@@ -518,7 +532,21 @@ list_apps() {
         chmod 644 "$APPS_FILE"
     fi
 
-    local apps=$(jq -r '.apps | keys[]' "$APPS_FILE" 2>/dev/null)
+    # Ensure proper permissions
+    chmod 644 "$APPS_FILE"
+
+    # Check if jq is installed
+    if ! command -v jq &> /dev/null; then
+        echo -e "${RED}Error: jq is required but not installed${NC}"
+        exit 1
+    fi
+
+    local apps
+    if ! apps=$(jq -r '.apps | keys[]' "$APPS_FILE" 2>/dev/null); then
+        echo -e "${RED}Error: Failed to read applications configuration${NC}"
+        exit 1
+    fi
+
     if [ -z "$apps" ]; then
         echo -e "${YELLOW}No applications configured yet${NC}"
         return 0
@@ -527,12 +555,21 @@ list_apps() {
     echo -e "${CYAN}Configured Applications:${NC}"
     echo "----------------------------------------"
     for app in $apps; do
-        local path=$(jq -r --arg app "$app" '.apps[$app].path' "$APPS_FILE")
+        local path
+        if ! path=$(jq -r --arg app "$app" '.apps[$app].path' "$APPS_FILE" 2>/dev/null); then
+            echo -e "${RED}Error: Failed to get path for application '$app'${NC}"
+            continue
+        fi
         echo -e "${GREEN}$app${NC}"
         echo "  Path: $path"
         if [ -d "$APPS_DIR/$app" ]; then
             if [ -f "$APPS_DIR/$app/docker-compose.yml" ]; then
-                echo "  Status: $(docker compose -f "$APPS_DIR/$app/docker-compose.yml" ps --format json 2>/dev/null | jq -r 'if . == [] then "Not running" else "Running" end')"
+                local status
+                if status=$(docker compose -f "$APPS_DIR/$app/docker-compose.yml" ps --format json 2>/dev/null | jq -r 'if . == [] then "Not running" else "Running" end'); then
+                    echo "  Status: $status"
+                else
+                    echo "  Status: Error checking status"
+                fi
             else
                 echo "  Status: Configuration missing"
             fi
@@ -541,6 +578,58 @@ list_apps() {
         fi
         echo "----------------------------------------"
     done
+}
+
+# Function to self-update the script
+self_update() {
+    echo -e "${CYAN}Checking for updates...${NC}"
+    
+    # Get the latest version from GitHub
+    local latest_version
+    if ! latest_version=$(curl -s "https://api.github.com/repos/lpolish/dockercomposemgr/releases/latest" | jq -r '.tag_name'); then
+        echo -e "${RED}Error: Failed to check for updates${NC}"
+        exit 1
+    fi
+
+    # Get current script path
+    local script_path
+    script_path=$(readlink -f "$0")
+    if [ -z "$script_path" ]; then
+        script_path="$0"
+    fi
+
+    # Download the latest version
+    echo "Downloading latest version ($latest_version)..."
+    local temp_file
+    temp_file=$(mktemp)
+    if ! curl -sL "https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/manage.sh" -o "$temp_file"; then
+        echo -e "${RED}Error: Failed to download update${NC}"
+        rm -f "$temp_file"
+        exit 1
+    fi
+
+    # Verify the downloaded script
+    if ! bash -n "$temp_file"; then
+        echo -e "${RED}Error: Downloaded script is invalid${NC}"
+        rm -f "$temp_file"
+        exit 1
+    fi
+
+    # Backup current script
+    cp "$script_path" "${script_path}.bak"
+
+    # Replace current script with new version
+    if ! mv "$temp_file" "$script_path"; then
+        echo -e "${RED}Error: Failed to update script${NC}"
+        mv "${script_path}.bak" "$script_path"
+        exit 1
+    fi
+
+    # Make the script executable
+    chmod +x "$script_path"
+
+    echo -e "${GREEN}Successfully updated to version $latest_version${NC}"
+    echo "A backup of your previous version was saved as ${script_path}.bak"
 }
 
 # Main script logic
@@ -630,21 +719,7 @@ case "$1" in
         fi
         ;;
     add)
-        if [ -z "$2" ] || [ -z "$3" ]; then
-            echo -e "${RED}Error: Application name and path required${NC}"
-            echo "Usage: dcm add <name> <path>"
-            exit 1
-        fi
-        if [ ! -f "$3/docker-compose.yml" ]; then
-            echo -e "${RED}Error: docker-compose.yml not found in specified path${NC}"
-            exit 1
-        fi
-        mkdir -p "$APPS_DIR/$2"
-        ln -sf "$3/docker-compose.yml" "$APPS_DIR/$2/docker-compose.yml"
-        if [ -f "$3/.env" ]; then
-            ln -sf "$3/.env" "$APPS_DIR/$2/.env"
-        fi
-        echo -e "${GREEN}Application '$2' added successfully${NC}"
+        add_app "$2" "$3"
         ;;
     clone)
         clone_app "$2" "$3"
@@ -656,6 +731,11 @@ case "$1" in
             exit 1
         fi
         if [ -d "$APPS_DIR/$2" ]; then
+            # Remove from config
+            local config=$(cat "$APPS_FILE")
+            config=$(echo "$config" | jq --arg app "$2" 'del(.apps[$app])')
+            echo "$config" > "$APPS_FILE"
+            # Remove directory
             rm -rf "$APPS_DIR/$2"
             echo -e "${GREEN}Application '$2' removed successfully${NC}"
         else
@@ -691,6 +771,9 @@ case "$1" in
         ;;
     create)
         create_app
+        ;;
+    self-update)
+        self_update
         ;;
     -h|--help)
         show_usage
