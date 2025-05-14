@@ -251,37 +251,50 @@ Or using wget:
 wget -qO- https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/install.sh | bash -s -- --user
 ```
 
-The user-specific installation will:
-1. Install the tool in `~/.local/bin`
-2. Create configuration in `~/.config/dockercomposemgr`
-3. Create application directory in `~/dockerapps`
-4. Add `~/.local/bin` to your PATH (requires shell restart or `source ~/.bashrc`)
-
 ### Windows
-You can install the tool with a single command in PowerShell:
+You can install the tool with a single PowerShell command:
 
 ```powershell
-Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/install.ps1'))
+# Run as Administrator
+Invoke-Expression (New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/install.ps1')
 ```
 
 ## Uninstallation
 
 ### Linux
+You can uninstall the tool with a single command using either curl or wget:
 
+#### System-wide Installation
+Using curl:
 ```bash
-# Run the uninstaller
-./install.sh --uninstall
+curl -fsSL https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/uninstall.sh | sudo bash
+```
 
-# Or use the -u flag
-./install.sh -u
+Or using wget:
+```bash
+wget -qO- https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/uninstall.sh | sudo bash
+```
+
+#### User-specific Installation
+Using curl:
+```bash
+curl -fsSL https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/uninstall.sh | bash
+```
+
+Or using wget:
+```bash
+wget -qO- https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/uninstall.sh | bash
 ```
 
 ### Windows
+You can uninstall the tool with a single PowerShell command:
 
 ```powershell
-# Run the uninstaller
-.\install.ps1 -Uninstall
+# Run as Administrator
+Invoke-Expression (New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/uninstall.ps1')
 ```
+
+Note: The uninstaller will remove Docker Compose Manager but will not affect your Docker applications in the configured apps directory.
 
 ## Troubleshooting
 
