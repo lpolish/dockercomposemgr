@@ -11,9 +11,17 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # Installation paths
-INSTALL_DIR="/usr/local/bin"
-CONFIG_DIR="$HOME/.config/dockercomposemgr"
-DEFAULT_APPS_DIR="$HOME/dockerapps"
+if [ "$EUID" -eq 0 ]; then
+    # Root installation
+    INSTALL_DIR="/usr/local/bin"
+    CONFIG_DIR="/etc/dockercomposemgr"
+    DEFAULT_APPS_DIR="/opt/dockerapps"
+else
+    # User installation
+    INSTALL_DIR="$HOME/.local/bin"
+    CONFIG_DIR="$HOME/.config/dockercomposemgr"
+    DEFAULT_APPS_DIR="$HOME/dockerapps"
+fi
 
 # Check if running in non-interactive mode
 if [ -t 0 ]; then
@@ -32,15 +40,18 @@ show_usage() {
     echo "  -u, --uninstall Remove Docker Compose Manager"
     echo "  -y, --yes      Non-interactive mode, install everything"
     echo "  --update       Update Docker Compose Manager to the latest version"
+    echo "  --user         Install for current user only (no sudo required)"
 }
 
 # Function to check if running as root
 check_root() {
     if [ "$EUID" -ne 0 ]; then
-        echo -e "${RED}Error: This script needs to be run as root${NC}"
-        echo "Please run: sudo $0"
-        exit 1
+        echo -e "${YELLOW}Warning: Running without root privileges${NC}"
+        echo "This will install Docker Compose Manager for the current user only."
+        echo "Some features may require additional configuration."
+        return 1
     fi
+    return 0
 }
 
 # Function to detect Linux distribution
@@ -342,6 +353,9 @@ install_dependencies() {
 install_manager() {
     echo -e "${CYAN}Installing Docker Compose Manager...${NC}"
     
+    # Create installation directory if it doesn't exist
+    mkdir -p "$INSTALL_DIR"
+    
     # Download management script
     echo -e "${CYAN}Downloading management script...${NC}"
     download_file "https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/manage.sh" "$INSTALL_DIR/dcm"
@@ -353,8 +367,20 @@ install_manager() {
     # Create apps directory structure
     create_apps_directory
     
+    # Add to PATH if not already there
+    if [ "$EUID" -ne 0 ]; then
+        if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
+            echo -e "${YELLOW}Adding $INSTALL_DIR to PATH...${NC}"
+            echo "export PATH=\"\$PATH:$INSTALL_DIR\"" >> "$HOME/.bashrc"
+            echo "export PATH=\"\$PATH:$INSTALL_DIR\"" >> "$HOME/.zshrc" 2>/dev/null || true
+        fi
+    fi
+    
     echo -e "${GREEN}Docker Compose Manager installed successfully${NC}"
     echo -e "${YELLOW}You can now use the 'dcm' command to manage your Docker Compose applications${NC}"
+    if [ "$EUID" -ne 0 ]; then
+        echo -e "${YELLOW}Please restart your shell or run 'source ~/.bashrc' to update your PATH${NC}"
+    fi
 }
 
 # Function to create default configuration
@@ -388,8 +414,10 @@ EOF
 EOF
     fi
 
-    # Ensure proper permissions
-    chown -R $SUDO_USER:$SUDO_USER "$CONFIG_DIR"
+    # Set proper permissions
+    if [ "$EUID" -eq 0 ]; then
+        chown -R $SUDO_USER:$SUDO_USER "$CONFIG_DIR"
+    fi
     chmod 755 "$CONFIG_DIR"
     chmod 644 "$CONFIG_DIR"/*.json
     
@@ -502,23 +530,41 @@ uninstall() {
     echo -e "${YELLOW}To remove applications, please delete the directory manually: $DEFAULT_APPS_DIR${NC}"
 }
 
-# Main script logic
-if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
-    show_usage
-    exit 0
-elif [ "$1" = "-u" ] || [ "$1" = "--uninstall" ]; then
-    uninstall
-    exit 0
-elif [ "$1" = "--update" ]; then
-    install_manager
-    exit 0
-elif [ "$1" = "-y" ] || [ "$1" = "--yes" ]; then
-    # Non-interactive mode
-    INTERACTIVE=0
-    install_dependencies
-    install_manager
-    exit 0
+# Main script execution
+if [ "$1" = "--user" ]; then
+    # Force user installation
+    INSTALL_DIR="$HOME/.local/bin"
+    CONFIG_DIR="$HOME/.config/dockercomposemgr"
+    DEFAULT_APPS_DIR="$HOME/dockerapps"
+    shift
 fi
 
-# Show interactive menu by default
+# Parse command line arguments
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -h|--help)
+            show_usage
+            exit 0
+            ;;
+        -u|--uninstall)
+            uninstall
+            exit 0
+            ;;
+        -y|--yes)
+            INTERACTIVE=0
+            ;;
+        --update)
+            install_manager
+            exit 0
+            ;;
+        *)
+            echo -e "${RED}Unknown option: $1${NC}"
+            show_usage
+            exit 1
+            ;;
+    esac
+    shift
+done
+
+# Show menu or proceed with installation
 show_menu 
