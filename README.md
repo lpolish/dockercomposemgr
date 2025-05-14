@@ -263,6 +263,25 @@ You can install the tool with a single command in PowerShell:
 Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/install.ps1'))
 ```
 
+## Uninstallation
+
+### Linux
+
+```bash
+# Run the uninstaller
+./install.sh --uninstall
+
+# Or use the -u flag
+./install.sh -u
+```
+
+### Windows
+
+```powershell
+# Run the uninstaller
+.\install.ps1 -Uninstall
+```
+
 ## Troubleshooting
 
 ### Common Issues

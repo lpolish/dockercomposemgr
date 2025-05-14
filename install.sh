@@ -263,9 +263,10 @@ show_menu() {
         echo "2. Install missing dependencies"
         echo "3. Install everything"
         echo "4. Update Docker Compose Manager"
-        echo "5. Exit"
+        echo "5. Uninstall Docker Compose Manager"
+        echo "6. Exit"
         echo "----------------------------------------"
-        read -p "Enter your choice [1-5]: " choice
+        read -p "Enter your choice [1-6]: " choice
 
         case $choice in
             1)
@@ -286,6 +287,10 @@ show_menu() {
                 return
                 ;;
             5)
+                uninstall
+                return
+                ;;
+            6)
                 echo "Exiting..."
                 exit 0
                 ;;
@@ -349,17 +354,122 @@ install_dependencies() {
     fi
 }
 
-# Function to install manager
+# Function to create directory with proper permissions
+create_directory() {
+    local dir=$1
+    local perms=$2
+    if [ ! -d "$dir" ]; then
+        mkdir -p "$dir"
+        chmod "$perms" "$dir"
+        if [ "$EUID" -eq 0 ]; then
+            chown "$SUDO_USER:$SUDO_USER" "$dir"
+        fi
+    else
+        chmod "$perms" "$dir"
+        if [ "$EUID" -eq 0 ]; then
+            chown "$SUDO_USER:$SUDO_USER" "$dir"
+        fi
+    fi
+}
+
+# Function to create file with proper permissions
+create_file() {
+    local file=$1
+    local content=$2
+    local perms=$3
+    echo "$content" > "$file"
+    chmod "$perms" "$file"
+    if [ "$EUID" -eq 0 ]; then
+        chown "$SUDO_USER:$SUDO_USER" "$file"
+    fi
+}
+
+# Function to create default configuration
+create_default_config() {
+    echo -e "${CYAN}Creating default configuration...${NC}"
+    
+    # Create config directory with proper permissions
+    create_directory "$CONFIG_DIR" "755"
+    
+    # Create config.json if it doesn't exist
+    if [ ! -f "$CONFIG_DIR/config.json" ]; then
+        create_file "$CONFIG_DIR/config.json" "{
+    \"apps_directory\": \"$DEFAULT_APPS_DIR\",
+    \"log_level\": \"info\",
+    \"log_retention_days\": 7,
+    \"backup\": {
+        \"include_volumes\": true,
+        \"retention_days\": 30
+    }
+}" "644"
+    fi
+    
+    # Create apps.json if it doesn't exist
+    if [ ! -f "$CONFIG_DIR/apps.json" ]; then
+        create_file "$CONFIG_DIR/apps.json" "{
+    \"apps\": {}
+}" "644"
+    fi
+    
+    echo -e "${GREEN}Default configuration created successfully${NC}"
+}
+
+# Function to create apps directory structure
+create_apps_directory() {
+    echo -e "${CYAN}Creating apps directory structure...${NC}"
+    
+    # Create apps directory with proper permissions
+    create_directory "$DEFAULT_APPS_DIR" "755"
+    create_directory "$DEFAULT_APPS_DIR/backups" "755"
+    
+    # Create README if it doesn't exist
+    if [ ! -f "$DEFAULT_APPS_DIR/README.md" ]; then
+        create_file "$DEFAULT_APPS_DIR/README.md" "# Docker Applications Directory
+
+This directory contains your Docker Compose applications managed by Docker Compose Manager.
+
+## Directory Structure
+
+Each application should be in its own subdirectory with the following structure:
+
+\`\`\`
+app_name/
+├── docker-compose.yml    # Docker Compose configuration
+├── .env                  # Environment variables (optional)
+└── data/                # Application data (optional)
+\`\`\`
+
+## Best Practices
+
+1. Keep each application in its own directory
+2. Use descriptive names for applications
+3. Include a README.md in each application directory
+4. Store sensitive data in .env files
+5. Use named volumes for persistent data" "644"
+    fi
+    
+    echo -e "${GREEN}Apps directory structure created successfully${NC}"
+}
+
+# Function to install Docker Compose Manager
 install_manager() {
     echo -e "${CYAN}Installing Docker Compose Manager...${NC}"
     
-    # Create installation directory if it doesn't exist
-    mkdir -p "$INSTALL_DIR"
+    # Create installation directory with proper permissions
+    create_directory "$INSTALL_DIR" "755"
     
     # Download management script
     echo -e "${CYAN}Downloading management script...${NC}"
-    download_file "https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/manage.sh" "$INSTALL_DIR/dcm"
-    chmod +x "$INSTALL_DIR/dcm"
+    if ! curl -fsSL "https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/manage.sh" -o "$INSTALL_DIR/dcm"; then
+        echo -e "${RED}Failed to download management script${NC}"
+        return 1
+    fi
+    
+    # Set executable permissions
+    chmod 755 "$INSTALL_DIR/dcm"
+    if [ "$EUID" -eq 0 ]; then
+        chown "$SUDO_USER:$SUDO_USER" "$INSTALL_DIR/dcm"
+    fi
     
     # Create default configuration
     create_default_config
@@ -381,109 +491,6 @@ install_manager() {
     if [ "$EUID" -ne 0 ]; then
         echo -e "${YELLOW}Please restart your shell or run 'source ~/.bashrc' to update your PATH${NC}"
     fi
-}
-
-# Function to create default configuration
-create_default_config() {
-    echo -e "${CYAN}Creating default configuration...${NC}"
-    
-    # Create config directory
-    mkdir -p "$CONFIG_DIR"
-    
-    # Create config.json if it doesn't exist
-    if [ ! -f "$CONFIG_DIR/config.json" ]; then
-        cat > "$CONFIG_DIR/config.json" << EOF
-{
-    "apps_directory": "$DEFAULT_APPS_DIR",
-    "log_level": "info",
-    "log_retention_days": 7,
-    "backup": {
-        "include_volumes": true,
-        "retention_days": 30
-    }
-}
-EOF
-    fi
-    
-    # Create apps.json if it doesn't exist
-    if [ ! -f "$CONFIG_DIR/apps.json" ]; then
-        cat > "$CONFIG_DIR/apps.json" << EOF
-{
-    "apps": {}
-}
-EOF
-    fi
-
-    # Set proper permissions
-    if [ "$EUID" -eq 0 ]; then
-        chown -R $SUDO_USER:$SUDO_USER "$CONFIG_DIR"
-    fi
-    chmod 755 "$CONFIG_DIR"
-    chmod 644 "$CONFIG_DIR"/*.json
-    
-    echo -e "${GREEN}Default configuration created successfully${NC}"
-}
-
-# Function to create apps directory structure
-create_apps_directory() {
-    echo -e "${CYAN}Creating apps directory structure...${NC}"
-    
-    # Create apps directory
-    mkdir -p "$DEFAULT_APPS_DIR/backups"
-    
-    # Create README if it doesn't exist
-    if [ ! -f "$DEFAULT_APPS_DIR/README.md" ]; then
-        cat > "$DEFAULT_APPS_DIR/README.md" << EOF
-# Docker Applications Directory
-
-This directory contains your Docker Compose applications managed by Docker Compose Manager.
-
-## Directory Structure
-
-Each application should be in its own subdirectory with the following structure:
-
-\`\`\`
-app_name/
-├── docker-compose.yml    # Docker Compose configuration
-├── .env                  # Environment variables (optional)
-└── data/                # Application data (optional)
-\`\`\`
-
-## Best Practices
-
-1. Keep each application in its own directory
-2. Use descriptive names for applications
-3. Include a README.md in each application directory
-4. Store sensitive data in .env files
-5. Use named volumes for persistent data
-
-## Managing Applications
-
-Use the \`dcm\` command to manage your applications:
-
-\`\`\`bash
-# List all applications
-dcm list
-
-# Start an application
-dcm start app_name
-
-# Stop an application
-dcm stop app_name
-
-# View application logs
-dcm logs app_name
-
-# Add a new application
-dcm add app_name /path/to/docker-compose.yml
-
-# Remove an application
-dcm remove app_name
-\`\`\`
-EOF
-    fi
-    
-    echo -e "${GREEN}Apps directory structure created successfully${NC}"
 }
 
 # Function to uninstall Docker Compose Manager
