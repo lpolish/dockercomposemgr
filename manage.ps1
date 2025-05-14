@@ -675,6 +675,70 @@ function List-Apps {
     }
 }
 
+# Function to self-update the script
+function Self-Update {
+    Write-Host "Checking for updates..." -ForegroundColor $Cyan
+    
+    # Get the current script's directory
+    $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+    $ScriptPath = Join-Path $ScriptDir "manage.ps1"
+    
+    # Calculate current script's checksum
+    try {
+        $CurrentChecksum = (Get-FileHash -Path $ScriptPath -Algorithm SHA256).Hash
+    }
+    catch {
+        Write-Host "Error: Could not calculate current script checksum" -ForegroundColor $Red
+        return $false
+    }
+    
+    # Download the latest version to a temporary file
+    $TempFile = [System.IO.Path]::GetTempFileName()
+    try {
+        Invoke-WebRequest -Uri "https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/manage.ps1" -OutFile $TempFile -UseBasicParsing
+    }
+    catch {
+        Write-Host "Failed to download update" -ForegroundColor $Red
+        Remove-Item -Path $TempFile -Force
+        return $false
+    }
+    
+    # Calculate new script's checksum
+    try {
+        $NewChecksum = (Get-FileHash -Path $TempFile -Algorithm SHA256).Hash
+    }
+    catch {
+        Write-Host "Error: Could not calculate new script checksum" -ForegroundColor $Red
+        Remove-Item -Path $TempFile -Force
+        return $false
+    }
+    
+    # Compare checksums
+    if ($CurrentChecksum -eq $NewChecksum) {
+        Write-Host "Already running the latest version" -ForegroundColor $Green
+        Remove-Item -Path $TempFile -Force
+        return $true
+    }
+    
+    # Create backup of current script
+    $BackupPath = "$ScriptPath.bak"
+    Copy-Item -Path $ScriptPath -Destination $BackupPath -Force
+    
+    # Replace current script with new version
+    try {
+        Move-Item -Path $TempFile -Destination $ScriptPath -Force
+    }
+    catch {
+        Write-Host "Failed to update script" -ForegroundColor $Red
+        Move-Item -Path $BackupPath -Destination $ScriptPath -Force
+        return $false
+    }
+    
+    Write-Host "Script updated successfully" -ForegroundColor $Green
+    Write-Host "A backup of the previous version was created at: $BackupPath" -ForegroundColor $Yellow
+    return $true
+}
+
 # Main script logic
 if ($args.Count -eq 0) {
     Show-Usage
@@ -788,8 +852,7 @@ switch ($args[0]) {
         Clone-App $args[1] $args[2]
     }
     "self-update" {
-        # Implementation of self-update command
-        Write-Host "Self-update command not implemented yet" -ForegroundColor $Yellow
+        Self-Update
     }
     "help" {
         Show-Usage

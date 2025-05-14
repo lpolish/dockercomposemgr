@@ -621,7 +621,7 @@ self_update() {
     
     # Get the current script's directory
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    SCRIPT_PATH="$SCRIPT_DIR/dcm"
+    SCRIPT_PATH="$SCRIPT_DIR/manage.sh"
     
     # Calculate current script's checksum
     CURRENT_CHECKSUM=$(sha256sum "$SCRIPT_PATH" 2>/dev/null | cut -d' ' -f1)
