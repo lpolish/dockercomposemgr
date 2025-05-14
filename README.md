@@ -82,6 +82,7 @@ The `apps.json` file stores the configuration for all managed applications:
 - `backup <name>` - Backup an application
 - `restore <name> <backup>` - Restore an application from backup
 - `update <name>` - Update an application
+- `self-update` - Update Docker Compose Manager to the latest version
 - `help` - Show help message
 
 ## Adding Applications

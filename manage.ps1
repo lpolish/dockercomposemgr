@@ -149,53 +149,72 @@ function Add-App {
 # Function to clone and add application
 function Clone-App {
     param (
-        [string]$RepoUrl,
-        [string]$AppName
+        [string]$Repo,
+        [string]$Name
     )
-
-    if (-not $RepoUrl -or -not $AppName) {
-        Write-Host "Error: Repository URL and application name required" -ForegroundColor $Red
-        Write-Host "Usage: dcm clone <repo_url> <app_name>"
-        exit 1
-    }
-
-    # Create temporary directory
+    
     $tempDir = Join-Path $env:TEMP ([System.Guid]::NewGuid().ToString())
-    New-Item -ItemType Directory -Force -Path $tempDir | Out-Null
+    $appsDir = Get-ConfigValue "apps_directory"
     
     Write-Host "Cloning repository..."
     try {
-        git clone $RepoUrl $tempDir
+        git clone $Repo $tempDir
     }
     catch {
-        Write-Host "Error: Failed to clone repository" -ForegroundColor $Red
-        Remove-Item -Recurse -Force $tempDir
-        exit 1
+        Write-Host "Failed to clone repository" -ForegroundColor $Red
+        Remove-Item -Path $tempDir -Recurse -Force -ErrorAction SilentlyContinue
+        return $false
     }
-
-    # Check if docker-compose.yml exists
-    if (-not (Test-Path "$tempDir\docker-compose.yml")) {
-        Write-Host "Error: Repository does not contain a docker-compose.yml file" -ForegroundColor $Red
-        Remove-Item -Recurse -Force $tempDir
-        exit 1
+    
+    # Create application directory in the configured apps directory
+    $appDir = Join-Path $appsDir $Name
+    if (-not (Test-Path $appDir)) {
+        New-Item -ItemType Directory -Path $appDir -Force | Out-Null
     }
-
-    # Create application directory
-    New-Item -ItemType Directory -Force -Path "$script:AppsDir\$AppName" | Out-Null
-
-    # Store application path in config
-    $apps = Get-Content $AppsFile | ConvertFrom-Json
-    $apps.apps.$AppName = @{
-        path = $tempDir
+    
+    # Copy docker-compose.yml and .env if they exist
+    $composeFile = Join-Path $tempDir "docker-compose.yml"
+    if (Test-Path $composeFile) {
+        Copy-Item $composeFile $appDir
     }
-    $apps | ConvertTo-Json -Depth 10 | Set-Content $AppsFile
-
+    else {
+        Write-Host "Warning: No docker-compose.yml found in repository" -ForegroundColor $Yellow
+    }
+    
+    $envFile = Join-Path $tempDir ".env"
+    if (Test-Path $envFile) {
+        Copy-Item $envFile $appDir
+    }
+    
     # Copy README.md if it exists
-    if (Test-Path "$tempDir\README.md") {
-        Copy-Item "$tempDir\README.md" "$script:AppsDir\$AppName\"
+    $readmeFile = Join-Path $tempDir "README.md"
+    if (Test-Path $readmeFile) {
+        Copy-Item $readmeFile $appDir
     }
-
-    Write-Host "Application '$AppName' cloned and added successfully" -ForegroundColor $Green
+    
+    # Add to apps.json
+    $appsFile = Join-Path $CONFIG_DIR "apps.json"
+    $tempFile = Join-Path $env:TEMP ([System.Guid]::NewGuid().ToString())
+    
+    if (Test-Path $appsFile) {
+        $apps = Get-Content $appsFile | ConvertFrom-Json
+        $apps.apps | Add-Member -NotePropertyName $Name -NotePropertyValue @{path = $tempDir}
+        $apps | ConvertTo-Json | Set-Content $tempFile
+    }
+    else {
+        @{
+            apps = @{
+                $Name = @{
+                    path = $tempDir
+                }
+            }
+        } | ConvertTo-Json | Set-Content $tempFile
+    }
+    
+    Move-Item -Path $tempFile -Destination $appsFile -Force
+    Remove-Item -Path $tempDir -Recurse -Force
+    
+    Write-Host "Application '$Name' cloned and added successfully" -ForegroundColor $Green
 }
 
 # Function to get application status
@@ -582,20 +601,46 @@ function Update-App {
 
 # Function to list all applications
 function List-Apps {
-    # Ensure config directory exists
+    # Ensure config directory exists with proper permissions
     if (-not (Test-Path $ConfigDir)) {
         New-Item -ItemType Directory -Force -Path $ConfigDir | Out-Null
-        Set-Content -Path $AppsFile -Value '{}'
+        $acl = Get-Acl $ConfigDir
+        $acl.SetAccessRuleProtection($false, $true)
+        Set-Acl $ConfigDir $acl
     }
 
+    # Ensure apps.json exists with proper permissions
     if (-not (Test-Path $AppsFile)) {
         Set-Content -Path $AppsFile -Value '{}'
+        $acl = Get-Acl $AppsFile
+        $acl.SetAccessRuleProtection($false, $true)
+        Set-Acl $AppsFile $acl
     }
 
-    $apps = Get-Content $AppsFile | ConvertFrom-Json
-    if (-not $apps.apps -or $apps.apps.PSObject.Properties.Count -eq 0) {
-        Write-Host "No applications configured yet" -ForegroundColor $Yellow
-        return
+    try {
+        $apps = Get-Content $AppsFile | ConvertFrom-Json
+        if (-not $apps.apps -or $apps.apps.PSObject.Properties.Count -eq 0) {
+            Write-Host "No applications configured yet" -ForegroundColor $Yellow
+            return
+        }
+    }
+    catch {
+        Write-Host "Error: Failed to read applications configuration" -ForegroundColor $Red
+        Write-Host "Attempting to fix permissions..." -ForegroundColor $Yellow
+        $acl = Get-Acl $AppsFile
+        $acl.SetAccessRuleProtection($false, $true)
+        Set-Acl $AppsFile $acl
+        try {
+            $apps = Get-Content $AppsFile | ConvertFrom-Json
+            if (-not $apps.apps -or $apps.apps.PSObject.Properties.Count -eq 0) {
+                Write-Host "No applications configured yet" -ForegroundColor $Yellow
+                return
+            }
+        }
+        catch {
+            Write-Host "Error: Still unable to read applications configuration" -ForegroundColor $Red
+            exit 1
+        }
     }
 
     Write-Host "Configured Applications:" -ForegroundColor $Cyan

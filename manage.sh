@@ -162,46 +162,54 @@ add_app() {
 
 # Function to clone and add application
 clone_app() {
-    local repo_url=$1
-    local app_name=$2
-
-    if [ -z "$repo_url" ] || [ -z "$app_name" ]; then
-        echo -e "${RED}Error: Repository URL and application name required${NC}"
-        echo "Usage: dcm clone <repo_url> <app_name>"
-        exit 1
-    fi
-
-    # Create temporary directory
+    local repo=$1
+    local name=$2
     local temp_dir=$(mktemp -d)
+    local apps_dir=$(get_config_value "apps_directory")
     
     echo "Cloning repository..."
-    if ! git clone "$repo_url" "$temp_dir"; then
-        echo -e "${RED}Error: Failed to clone repository${NC}"
+    if ! git clone "$repo" "$temp_dir"; then
+        echo "Failed to clone repository"
         rm -rf "$temp_dir"
-        exit 1
+        return 1
     fi
-
-    # Check if docker-compose.yml exists
-    if [ ! -f "$temp_dir/docker-compose.yml" ]; then
-        echo -e "${RED}Error: Repository does not contain a docker-compose.yml file${NC}"
-        rm -rf "$temp_dir"
-        exit 1
+    
+    # Create application directory in the configured apps directory
+    local app_dir="$apps_dir/$name"
+    if [ ! -d "$app_dir" ]; then
+        mkdir -p "$app_dir"
     fi
-
-    # Create application directory
-    mkdir -p "$APPS_DIR/$app_name"
-
-    # Store application path in config
-    local config=$(cat "$APPS_FILE")
-    config=$(echo "$config" | jq --arg app "$app_name" --arg path "$temp_dir" '.apps[$app] = {"path": $path}')
-    echo "$config" > "$APPS_FILE"
-
+    
+    # Copy docker-compose.yml and .env if they exist
+    if [ -f "$temp_dir/docker-compose.yml" ]; then
+        cp "$temp_dir/docker-compose.yml" "$app_dir/"
+    else
+        echo "Warning: No docker-compose.yml found in repository"
+    fi
+    
+    if [ -f "$temp_dir/.env" ]; then
+        cp "$temp_dir/.env" "$app_dir/"
+    fi
+    
     # Copy README.md if it exists
     if [ -f "$temp_dir/README.md" ]; then
-        cp "$temp_dir/README.md" "$APPS_DIR/$app_name/"
+        cp "$temp_dir/README.md" "$app_dir/"
     fi
-
-    echo -e "${GREEN}Application '$app_name' cloned and added successfully${NC}"
+    
+    # Add to apps.json
+    local apps_file="$CONFIG_DIR/apps.json"
+    local temp_file=$(mktemp)
+    
+    if [ -f "$apps_file" ]; then
+        jq --arg name "$name" --arg path "$temp_dir" '.apps[$name] = {"path": $path}' "$apps_file" > "$temp_file"
+    else
+        echo "{\"apps\": {\"$name\": {\"path\": \"$temp_dir\"}}}" > "$temp_file"
+    fi
+    
+    mv "$temp_file" "$apps_file"
+    rm -rf "$temp_dir"
+    
+    echo "Application '$name' cloned and added successfully"
 }
 
 # Function to get application status
@@ -538,20 +546,23 @@ create_app() {
 
 # Function to list all applications
 list_apps() {
-    # Ensure config directory exists
+    # Ensure config directory exists with proper permissions
     if [ ! -d "$CONFIG_DIR" ]; then
         mkdir -p "$CONFIG_DIR"
-        echo "{}" > "$APPS_FILE"
-        chmod 644 "$APPS_FILE"
+        chmod 755 "$CONFIG_DIR"
+    else
+        # Fix permissions if they're incorrect
+        chmod 755 "$CONFIG_DIR"
     fi
 
+    # Ensure apps.json exists with proper permissions
     if [ ! -f "$APPS_FILE" ]; then
         echo "{}" > "$APPS_FILE"
         chmod 644 "$APPS_FILE"
+    else
+        # Fix permissions if they're incorrect
+        chmod 644 "$APPS_FILE"
     fi
-
-    # Ensure proper permissions
-    chmod 644 "$APPS_FILE"
 
     # Check if jq is installed
     if ! command -v jq &> /dev/null; then
@@ -562,7 +573,12 @@ list_apps() {
     local apps
     if ! apps=$(jq -r '.apps | keys[]' "$APPS_FILE" 2>/dev/null); then
         echo -e "${RED}Error: Failed to read applications configuration${NC}"
-        exit 1
+        echo -e "${YELLOW}Attempting to fix permissions...${NC}"
+        chmod 644 "$APPS_FILE"
+        if ! apps=$(jq -r '.apps | keys[]' "$APPS_FILE" 2>/dev/null); then
+            echo -e "${RED}Error: Still unable to read applications configuration${NC}"
+            exit 1
+        fi
     fi
 
     if [ -z "$apps" ]; then
