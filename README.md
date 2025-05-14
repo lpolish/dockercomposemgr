@@ -4,7 +4,18 @@ A simple tool to manage multiple Docker Compose applications on both Linux and W
 
 ## Directory Structure
 
-### Linux
+### Linux (System-wide Installation)
+```
+/etc/dockercomposemgr/
+├── config.json        # Global configuration file
+├── apps.json         # Application configuration file
+└── /opt/dockerapps/  # Application directory
+    ├── backups/      # Backup directory
+    └── app1/         # Application directory
+        └── README.md # Application documentation
+```
+
+### Linux (User-specific Installation)
 ```
 ~/.config/dockercomposemgr/
 ├── config.json        # Global configuration file
@@ -213,9 +224,10 @@ dcm restore myapp backup_file.tar.gz
 ### Linux
 You can install the tool with a single command using either curl or wget:
 
+#### System-wide Installation (requires sudo)
 Using curl (recommended, comes pre-installed on most systems):
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/install.sh | bash -s -- -y
+curl -fsSL https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/install.sh | sudo bash -s -- -y
 ```
 
 Or using wget (if you prefer, may need to be installed first):
@@ -224,8 +236,25 @@ Or using wget (if you prefer, may need to be installed first):
 sudo apt-get update && sudo apt-get install -y wget
 
 # Then run the installation
-wget -qO- https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/install.sh | bash -s -- -y
+wget -qO- https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/install.sh | sudo bash -s -- -y
 ```
+
+#### User-specific Installation (no sudo required)
+Using curl:
+```bash
+curl -fsSL https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/install.sh | bash -s -- --user
+```
+
+Or using wget:
+```bash
+wget -qO- https://raw.githubusercontent.com/lpolish/dockercomposemgr/main/install.sh | bash -s -- --user
+```
+
+The user-specific installation will:
+1. Install the tool in `~/.local/bin`
+2. Create configuration in `~/.config/dockercomposemgr`
+3. Create application directory in `~/dockerapps`
+4. Add `~/.local/bin` to your PATH (requires shell restart or `source ~/.bashrc`)
 
 ### Windows
 You can install the tool with a single command in PowerShell:
@@ -252,11 +281,17 @@ Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManage
    - Check file and directory permissions
    - Ensure you have write access to the apps directory
    - Verify Docker socket permissions (Linux)
+   - For user-specific installation, ensure `~/.local/bin` is in your PATH
 
 4. **Backup/Restore Issues**
    - Ensure sufficient disk space
    - Check volume permissions
    - Verify tar command availability
+
+5. **Command Not Found After Installation**
+   - For user-specific installation, restart your shell or run `source ~/.bashrc`
+   - Verify that `~/.local/bin` is in your PATH
+   - Check if the installation completed successfully
 
 ## Contributing
 
