@@ -2,6 +2,7 @@
 
 # Docker Compose Manager Uninstaller for Linux
 # A command-line tool for uninstalling Docker Compose Manager
+# Last updated: 2024-03-21
 
 # Colors for output
 RED='\033[0;31m'
