@@ -57,6 +57,7 @@ show_usage() {
     echo "  backup <name>           Backup an application"
     echo "  restore <name> <backup> Restore an application from backup"
     echo "  update <name>           Update an application"
+    echo "  self-update             Update Docker Compose Manager to the latest version"
     echo "  help                    Show this help message"
     echo ""
     echo "Options:"

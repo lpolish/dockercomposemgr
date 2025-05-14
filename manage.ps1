@@ -50,6 +50,7 @@ function Show-Usage {
     Write-Host "  backup <name>           Backup an application"
     Write-Host "  restore <name> <backup> Restore an application from backup"
     Write-Host "  update <name>           Update an application"
+    Write-Host "  self-update             Update Docker Compose Manager to the latest version"
     Write-Host "  help                    Show this help message"
     Write-Host ""
     Write-Host "Options:"
@@ -785,6 +786,10 @@ switch ($args[0]) {
             exit 1
         }
         Clone-App $args[1] $args[2]
+    }
+    "self-update" {
+        # Implementation of self-update command
+        Write-Host "Self-update command not implemented yet" -ForegroundColor $Yellow
     }
     "help" {
         Show-Usage
